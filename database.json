@@ -1,0 +1,32 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "login": "admin",
+      "password": "123",
+      "name": "Администратор"
+    }
+  ],
+  "clients": [],
+  "models": [
+    {
+      "sku": "sd",
+      "color": "sd",
+      "price": "",
+      "id": 1765452748532
+    },
+    {
+      "sku": "11",
+      "color": "11",
+      "price": "11",
+      "id": 1765452928014
+    }
+  ],
+  "orders": [],
+  "settings": {
+    "sizeGrid": {
+      "min": "40",
+      "max": "45"
+    }
+  }
+}
