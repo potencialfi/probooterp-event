@@ -1,5 +1,4 @@
 export const API_URL = 'http://localhost:3001/api';
-// Адрес для картинок
 export const IMG_URL = 'http://localhost:3001/images';
 
 export const apiCall = async (endpoint, method = 'GET', body = null) => {

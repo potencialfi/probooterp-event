@@ -13,18 +13,15 @@ const DB_FILE = path.join(__dirname, 'database.json');
 const DIST_DIR = path.join(__dirname, 'dist');
 const IMAGES_DIR = path.join(__dirname, 'images');
 
-// Создаем папку images, если нет
 if (!fs.existsSync(IMAGES_DIR)) {
     fs.mkdirSync(IMAGES_DIR, { recursive: true });
 }
 
 app.use(cors());
-// Увеличиваем лимит для загрузки картинок в base64
-app.use(express.json({ limit: '50mb' })); 
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(DIST_DIR));
 app.use('/images', express.static(IMAGES_DIR));
 
-// Default data structure
 const DEFAULT_DATA = {
   users: [{ id: 1, login: 'admin', password: '123', name: 'Администратор' }],
   clients: [],
@@ -59,26 +56,21 @@ const initDB = () => {
   let db = readDB();
   if (!db) {
     writeDB(DEFAULT_DATA);
-    db = DEFAULT_DATA;
+    return;
   }
   
   let changed = false;
   if (!db.settings) { db.settings = DEFAULT_DATA.settings; changed = true; }
-  
-  // Мержим новые поля настроек
   if (db.settings.brandName === undefined) { db.settings.brandName = DEFAULT_DATA.settings.brandName; changed = true; }
   if (db.settings.brandPhones === undefined) { db.settings.brandPhones = DEFAULT_DATA.settings.brandPhones; changed = true; }
   if (db.settings.brandLogo === undefined) { db.settings.brandLogo = DEFAULT_DATA.settings.brandLogo; changed = true; }
-
-  // --- МИГРАЦИЯ НОМЕРОВ ЗАКАЗОВ ---
-  // Если у заказов нет orderId, присваиваем их хронологически
+  
+  // МИГРАЦИЯ: Присвоение порядковых номеров старым заказам
   if (db.orders && db.orders.length > 0) {
-      // Проверяем, есть ли заказы без orderId
       const missingIds = db.orders.some(o => !o.orderId);
-      
       if (missingIds) {
           console.log("Migrating Order IDs...");
-          // Сортируем от старых к новым по timestamp (id)
+          // Сортируем от старых к новым по дате создания (id)
           const sortedOrders = [...db.orders].sort((a, b) => a.id - b.id);
           
           // Присваиваем номера 1, 2, 3...
@@ -86,8 +78,7 @@ const initDB = () => {
               order.orderId = index + 1;
           });
 
-          // Возвращаем в исходный порядок (новые сверху), если так было, или просто сохраняем
-          // Обычно в UI мы показываем новые сверху, поэтому массив в БД часто unshifted
+          // Сохраняем (обычно мы храним новые сверху, поэтому реверс)
           db.orders = sortedOrders.reverse();
           changed = true;
       }
@@ -133,22 +124,14 @@ app.post('/api/login', (req, res) => {
 app.get('/api/data', (req, res) => {
   const db = readDB();
   if (!db) return res.json(DEFAULT_DATA);
-  
-  const safeSettings = {
-      ...DEFAULT_DATA.settings, 
-      ...db.settings 
-  };
-
+  const safeSettings = { ...DEFAULT_DATA.settings, ...db.settings };
   const { users, settings, ...rest } = db;
   res.json({ ...rest, settings: safeSettings });
 });
 
 app.post('/api/settings', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
-  db.settings = {
-      ...db.settings,
-      ...req.body
-  };
+  db.settings = { ...db.settings, ...req.body };
   writeDB(db);
   res.json({ success: true, settings: db.settings });
 });
@@ -168,6 +151,7 @@ app.post('/api/upload-logo', (req, res) => {
         fs.writeFileSync(filePath, buffer);
 
         const db = readDB();
+        // Удаляем старое лого
         if (db.settings.brandLogo) {
              const oldPath = path.join(IMAGES_DIR, db.settings.brandLogo);
              if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -238,33 +222,13 @@ app.delete('/api/clients/:id', (req, res) => {
 
 app.post('/api/clients/import', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
-  const importedData = req.body;
-  let added = 0; let updated = 0; const errors = [];
-  importedData.forEach((item, idx) => {
-    const rawName = item.name || item.Name || item.Имя || item.ФИО;
-    const rawCity = item.city || item.City || item.Город || "";
-    const rawPhone = item.phone || item.Phone || item.Телефон || item.Номер;
-    if (!rawName || !rawPhone) { errors.push(`Строка ${idx + 2}: Нет имени/телефона`); return; }
-    const phoneStr = String(rawPhone);
-    if (!isValidPhone(phoneStr)) { errors.push(`Строка ${idx + 2}: Неверный телефон`); return; }
-    const cleanPhone = normalizePhone(phoneStr);
-    const formattedPhone = formatPhoneNumber(phoneStr);
-    const existIndex = db.clients.findIndex(c => normalizePhone(c.phone) === cleanPhone);
-    if (existIndex !== -1) {
-      let wasUpdated = false;
-      if (db.clients[existIndex].name !== rawName) { db.clients[existIndex].name = rawName; wasUpdated = true; }
-      if (rawCity && db.clients[existIndex].city !== rawCity) { db.clients[existIndex].city = rawCity; wasUpdated = true; }
-      if (db.clients[existIndex].phone !== formattedPhone) { db.clients[existIndex].phone = formattedPhone; wasUpdated = true; }
-      if (wasUpdated) updated++;
-    } else {
-      db.clients.push({ id: Date.now() + idx, name: String(rawName).trim(), city: String(rawCity).trim(), phone: formattedPhone });
-      added++;
-    }
-  });
+  const newClients = req.body.map((c, i) => ({ ...c, id: Date.now() + i }));
+  db.clients = [...db.clients, ...newClients];
   writeDB(db);
-  res.json({ added, updated, errors });
+  res.json(newClients);
 });
 
+// --- MODELS ---
 app.post('/api/models', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const newModel = { ...req.body, id: Date.now() };
@@ -320,19 +284,26 @@ app.post('/api/orders', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   
   // Генерация следующего ID
-  // Находим самый большой orderId в базе
   const maxOrderId = db.orders.reduce((max, o) => Math.max(max, o.orderId || 0), 0);
   const nextId = maxOrderId + 1;
 
   const newOrder = { 
       ...req.body, 
-      id: Date.now(), // Технический ID
-      orderId: nextId // Человеческий номер (№1, №2...)
+      id: Date.now(), 
+      orderId: nextId 
   };
   
   db.orders.unshift(newOrder);
   writeDB(db);
   res.json(newOrder);
+});
+
+app.delete('/api/orders/:id', (req, res) => {
+    const db = readDB() || DEFAULT_DATA;
+    const id = Number(req.params.id);
+    db.orders = db.orders.filter(o => o.id !== id);
+    writeDB(db);
+    res.json({ success: true });
 });
 
 app.use((req, res) => {

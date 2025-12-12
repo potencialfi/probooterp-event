@@ -1,7 +1,5 @@
-// Очистка номера телефона
 export const normalizePhone = (phone) => String(phone).replace(/\D/g, '');
 
-// Форматирование телефона
 export const formatPhoneNumber = (value) => {
   if (!value) return '';
   const digits = String(value).replace(/\D/g, '');
@@ -17,7 +15,6 @@ export const formatPhoneNumber = (value) => {
   return value; 
 };
 
-// Склонение слов
 export const getNoun = (number, one, two, five) => {
   let n = Math.abs(number);
   n %= 100;
@@ -35,7 +32,7 @@ export const convertPrice = (priceInUSD, currency, rates) => {
   return (priceInUSD * rate).toFixed(2);
 };
 
-// Конвертация в USD (база) из другой валюты (БЕЗОПАСНАЯ ВЕРСИЯ)
+// Конвертация в USD (база) из другой валюты
 export const convertToUSD = (amount, currency, rates) => {
   if (!amount) return 0;
   if (!currency || currency === 'USD') return Number(amount);
@@ -43,7 +40,6 @@ export const convertToUSD = (amount, currency, rates) => {
   return Number(amount) / rate;
 };
 
-// Коды валют
 export const CURRENCY_CODES = { USD: 'USD', EUR: 'EUR', UAH: 'UAH' };
 
 // --- Excel Helpers ---
@@ -66,4 +62,52 @@ export async function handleExportExcel(data, filename) {
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     XLSX.writeFile(wb, `${filename}.xlsx`);
   } catch (e) { console.error(e); }
+}
+
+export async function exportSingleOrderXLSX(order, client) {
+    try {
+        const XLSX = await ensureXLSX();
+        
+        const rows = [
+            ["НАКЛАДНАЯ", `Заказ №${order.orderId || order.id}`],
+            ["Дата", new Date(order.date).toLocaleDateString()],
+            [],
+            ["КЛИЕНТ"],
+            ["Имя", client.name],
+            ["Город", client.city],
+            ["Телефон", client.phone],
+            [],
+            ["ТОВАРЫ"],
+            ["Артикул", "Цвет", "Размеры", "Кол-во", "Цена (USD)", "Сумма (USD)"],
+        ];
+
+        order.items.forEach(item => {
+            const sizesStr = item.sizes ? 
+                Object.entries(item.sizes).filter(([_, q]) => q > 0).map(([s, q]) => `${s}(${q})`).join(', ') : item.note;
+
+            rows.push([
+                item.sku, 
+                item.color, 
+                sizesStr, 
+                item.qty, 
+                item.price, 
+                item.total
+            ]);
+        });
+
+        rows.push([]);
+        rows.push(["ИТОГО", "", "", order.items.reduce((a,b)=>a+b.qty,0), "", order.total]);
+        
+        if (order.payment && order.payment.originalAmount) {
+             rows.push(["ОПЛАЧЕНО", "", "", "", "", `${order.payment.originalAmount} ${order.payment.originalCurrency}`]);
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [{wch:20}, {wch:15}, {wch:40}, {wch:10}, {wch:12}, {wch:15}];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Order");
+        XLSX.writeFile(wb, `Order_${order.orderId || order.id}.xlsx`);
+
+    } catch (e) { console.error("Excel export error:", e); }
 }
