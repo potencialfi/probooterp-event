@@ -30,11 +30,13 @@ export default function App() {
       sizeGrid: { min: '', max: '' }, 
       boxTemplates: { 6:{}, 8:{}, 10:{}, 12:{} }, 
       exchangeRates: { usd: 0, eur: 0, isManual: false },
-      mainCurrency: 'USD'
+      mainCurrency: 'USD',
+      brandName: 'SHOE EXPO',
+      brandPhones: [],
+      brandLogo: null
   });
 
-  // --- ЧЕРНОВИК ЗАКАЗА (State Lift) ---
-  // Храним данные формы заказа здесь, чтобы они не стирались при смене табов
+  // --- ЧЕРНОВИК ЗАКАЗА ---
   const initialOrderState = {
       cart: [],
       clientPhone: '',
@@ -42,11 +44,10 @@ export default function App() {
       clientCity: '',
       selectedClient: null,
       prepayment: '',
-      paymentCurrency: '' // Будет установлено при загрузке настроек
+      paymentCurrency: 'USD',
+      lumpDiscount: ''
   };
   const [orderDraft, setOrderDraft] = useState(initialOrderState);
-
-  // Состояние для подсветки нужного блока в настройках
   const [highlightSetting, setHighlightSetting] = useState(null);
   
   const [toast, setToast] = useState(null); 
@@ -62,7 +63,6 @@ export default function App() {
              if(data.settings.sizeGrid) setSizeGrid(data.settings.sizeGrid);
              setSettings(prev => ({ ...prev, ...data.settings }));
              
-             // Если в черновике еще нет валюты, ставим основную
              setOrderDraft(prev => ({
                  ...prev,
                  paymentCurrency: prev.paymentCurrency || data.settings.mainCurrency || 'USD'
@@ -79,7 +79,6 @@ export default function App() {
   
   const triggerToast = (msg, type = 'success') => setToast({ message: msg, type });
   
-  // Функция очистки заказа (передается в NewOrderPage)
   const clearOrderDraft = () => {
       setOrderDraft({
           ...initialOrderState,
@@ -88,7 +87,6 @@ export default function App() {
       triggerToast("Форма заказа очищена");
   };
 
-  // Функция для навигации в настройки с подсветкой (передается в NewOrderPage)
   const goToSettingsAndHighlight = (section) => {
       setActiveTab('settings');
       setHighlightSetting(section);
@@ -141,7 +139,6 @@ export default function App() {
                 orders={orders} 
                 triggerToast={triggerToast} 
                 settings={settings}
-                // Пропсы для сохранения состояния
                 orderDraft={orderDraft}
                 setOrderDraft={setOrderDraft}
                 clearOrderDraft={clearOrderDraft}
@@ -151,7 +148,9 @@ export default function App() {
         
         {activeTab === 'clients' && <ClientsPage clients={clients} setClients={setClients} triggerToast={triggerToast} handleFileImport={handleFileImport} loadAllData={loadAllData} setImportResult={setImportResult}/>}
         {activeTab === 'models' && <ModelsPage models={models} setModels={setModels} triggerToast={triggerToast} handleFileImport={handleFileImport} loadAllData={loadAllData} setImportResult={setImportResult} settings={settings}/>}
-        {activeTab === 'history' && <OrdersPage orders={orders} clients={clients} />}
+        
+        {/* ИСПРАВЛЕНО: Передаем settings в OrdersPage */}
+        {activeTab === 'history' && <OrdersPage orders={orders} clients={clients} settings={settings} />}
         
         {activeTab === 'settings' && (
             <SettingsPage 

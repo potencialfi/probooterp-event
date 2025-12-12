@@ -19,7 +19,8 @@ if (!fs.existsSync(IMAGES_DIR)) {
 }
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // Увеличил лимит для картинок
+// Увеличиваем лимит для загрузки картинок в base64
+app.use(express.json({ limit: '50mb' })); 
 app.use(express.static(DIST_DIR));
 app.use('/images', express.static(IMAGES_DIR));
 
@@ -58,15 +59,39 @@ const initDB = () => {
   let db = readDB();
   if (!db) {
     writeDB(DEFAULT_DATA);
-    return;
+    db = DEFAULT_DATA;
   }
   
   let changed = false;
   if (!db.settings) { db.settings = DEFAULT_DATA.settings; changed = true; }
-  // Мержим новые поля
+  
+  // Мержим новые поля настроек
   if (db.settings.brandName === undefined) { db.settings.brandName = DEFAULT_DATA.settings.brandName; changed = true; }
   if (db.settings.brandPhones === undefined) { db.settings.brandPhones = DEFAULT_DATA.settings.brandPhones; changed = true; }
   if (db.settings.brandLogo === undefined) { db.settings.brandLogo = DEFAULT_DATA.settings.brandLogo; changed = true; }
+
+  // --- МИГРАЦИЯ НОМЕРОВ ЗАКАЗОВ ---
+  // Если у заказов нет orderId, присваиваем их хронологически
+  if (db.orders && db.orders.length > 0) {
+      // Проверяем, есть ли заказы без orderId
+      const missingIds = db.orders.some(o => !o.orderId);
+      
+      if (missingIds) {
+          console.log("Migrating Order IDs...");
+          // Сортируем от старых к новым по timestamp (id)
+          const sortedOrders = [...db.orders].sort((a, b) => a.id - b.id);
+          
+          // Присваиваем номера 1, 2, 3...
+          sortedOrders.forEach((order, index) => {
+              order.orderId = index + 1;
+          });
+
+          // Возвращаем в исходный порядок (новые сверху), если так было, или просто сохраняем
+          // Обычно в UI мы показываем новые сверху, поэтому массив в БД часто unshifted
+          db.orders = sortedOrders.reverse();
+          changed = true;
+      }
+  }
 
   if (changed) writeDB(db);
 };
@@ -136,17 +161,13 @@ app.post('/api/upload-logo', (req, res) => {
         const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
-        // Генерируем имя файла: если есть бренд - используем его, иначе default + timestamp
         const safeBrand = brandName ? brandName.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'brand';
         const fileName = `${safeBrand}_${Date.now()}.png`;
         const filePath = path.join(IMAGES_DIR, fileName);
 
         fs.writeFileSync(filePath, buffer);
 
-        // Обновляем БД
         const db = readDB();
-        
-        // Удаляем старое лого, если было (опционально, чтобы не засорять)
         if (db.settings.brandLogo) {
              const oldPath = path.join(IMAGES_DIR, db.settings.brandLogo);
              if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -158,7 +179,7 @@ app.post('/api/upload-logo', (req, res) => {
         res.json({ success: true, fileName });
     } catch (e) {
         console.error("Upload error:", e);
-        res.status(500).json({ message: "Ошибка сохранения файла на сервере" });
+        res.status(500).json({ message: "Ошибка сохранения файла" });
     }
 });
 
@@ -174,7 +195,7 @@ app.get('/api/nbu-rates', async (req, res) => {
     }
 });
 
-// --- REST OF API (Clients, Models, Orders) ---
+// --- CLIENTS ---
 app.post('/api/clients', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const { name, phone, city } = req.body;
@@ -189,6 +210,7 @@ app.post('/api/clients', (req, res) => {
   writeDB(db);
   res.json(newClient);
 });
+
 app.put('/api/clients/:id', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const id = Number(req.params.id);
@@ -206,12 +228,14 @@ app.put('/api/clients/:id', (req, res) => {
     res.json(db.clients[index]);
   } else { res.status(404).json({ message: "Клиент не найден" }); }
 });
+
 app.delete('/api/clients/:id', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   db.clients = db.clients.filter(c => c.id !== Number(req.params.id));
   writeDB(db);
   res.json({ success: true });
 });
+
 app.post('/api/clients/import', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const importedData = req.body;
@@ -240,6 +264,7 @@ app.post('/api/clients/import', (req, res) => {
   writeDB(db);
   res.json({ added, updated, errors });
 });
+
 app.post('/api/models', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const newModel = { ...req.body, id: Date.now() };
@@ -247,6 +272,7 @@ app.post('/api/models', (req, res) => {
   writeDB(db);
   res.json(newModel);
 });
+
 app.put('/api/models/:id', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const id = Number(req.params.id);
@@ -257,12 +283,14 @@ app.put('/api/models/:id', (req, res) => {
     res.json(db.models[index]);
   } else { res.status(404).json({ error: "Not found" }); }
 });
+
 app.delete('/api/models/:id', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   db.models = db.models.filter(m => m.id !== Number(req.params.id));
   writeDB(db);
   res.json({ success: true });
 });
+
 app.post('/api/models/import', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const importedData = req.body;
@@ -286,21 +314,29 @@ app.post('/api/models/import', (req, res) => {
   writeDB(db);
   res.json({ added, updated, errors });
 });
+
+// --- ORDERS ---
 app.post('/api/orders', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
-  const newOrder = { ...req.body, id: Date.now() };
+  
+  // Генерация следующего ID
+  // Находим самый большой orderId в базе
+  const maxOrderId = db.orders.reduce((max, o) => Math.max(max, o.orderId || 0), 0);
+  const nextId = maxOrderId + 1;
+
+  const newOrder = { 
+      ...req.body, 
+      id: Date.now(), // Технический ID
+      orderId: nextId // Человеческий номер (№1, №2...)
+  };
+  
   db.orders.unshift(newOrder);
   writeDB(db);
   res.json(newOrder);
 });
 
 app.use((req, res) => {
-  const indexPath = path.join(DIST_DIR, 'index.html');
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).send('API endpoint not found (and frontend not built)');
-  }
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {

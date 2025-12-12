@@ -1681,6 +1681,41 @@
   ],
   "orders": [
     {
+      "date": "2025-12-12T17:29:21.279Z",
+      "clientId": 1765490228312,
+      "items": [
+        {
+          "id": 1765471945442.0442,
+          "sku": "11",
+          "color": "11",
+          "price": 11,
+          "modelId": 1765471945442.0442,
+          "qty": 84,
+          "note": "40 (7), 41 (14), 42 (21), 43 (21), 44 (14), 45 (7)",
+          "sizes": {
+            "40": 7,
+            "41": 14,
+            "42": 21,
+            "43": 21,
+            "44": 14,
+            "45": 7
+          },
+          "discountPerPair": 0,
+          "total": 924
+        }
+      ],
+      "total": 924,
+      "lumpDiscount": 0,
+      "payment": {
+        "originalAmount": 0,
+        "originalCurrency": "USD",
+        "rateAtMoment": 1,
+        "prepaymentInUSD": 0
+      },
+      "id": 1765560561299,
+      "orderId": 2
+    },
+    {
       "date": "2025-12-12T17:05:28.118Z",
       "clientId": 1765490228310,
       "items": [
@@ -1864,7 +1899,8 @@
         "rateAtMoment": 1,
         "prepaymentInUSD": 11
       },
-      "id": 1765559128131
+      "id": 1765559128131,
+      "orderId": 1
     }
   ],
   "settings": {

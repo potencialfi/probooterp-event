@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, ShoppingCart, User, Phone, MapPin, AlertTriangle, Box, Eraser, Edit, Trash2, CreditCard, CheckSquare, Square, X } from 'lucide-react';
+import { Search, Plus, ShoppingCart, User, Phone, MapPin, AlertTriangle, Box, Eraser, Edit, Trash2, CreditCard, CheckSquare, Square, X, Printer, Globe } from 'lucide-react';
 import { apiCall } from '../api';
 import { normalizePhone, formatPhoneNumber, getNoun, convertPrice, convertToUSD } from '../utils';
 import { Button, Input, Modal } from '../components/UI';
@@ -129,12 +129,7 @@ const NewOrderPage = ({
       return acc + (priceWithDiscount * i.qty);
   }, 0);
 
-  // Скидка на весь заказ вычитается в конце (в USD)
-  // lumpDiscount в черновике хранится в той валюте, в которой его ввели? 
-  // Предположим, мы вводим в основной валюте, значит нужно конвертировать в USD для расчетов?
-  // Для простоты, пока считаем что lumpDiscount вводится в USD (так как база в USD).
-  // Если нужно вводить в UAH/EUR, надо конвертировать. 
-  // ДОРАБОТКА: Считаем lumpDiscount введенным в mainCurrency и конвертируем в USD для хранения
+  // Конвертируем общую скидку в USD для расчетов (так как вводим её в mainCurrency)
   const lumpDiscountUSD = convertToUSD(parseFloat(lumpDiscount) || 0, mainCurrency, settings?.exchangeRates);
 
   const totalCartUSD = Math.max(0, subTotalUSD - lumpDiscountUSD);
@@ -157,14 +152,12 @@ const NewOrderPage = ({
   const prepaymentInUSD = paymentRate > 0 ? Number(prepayment) / paymentRate : 0;
   const remainingTotalUSD = Math.max(0, totalCartUSD - prepaymentInUSD);
 
-  // --- HANDLERS ---
+  // --- HANDLERS (Без изменений) ---
   const updateDraft = (fields) => { setOrderDraft(prev => ({ ...prev, ...fields })); };
-  
   const applyDiscount = (result) => {
       if (result.type === 'lump') {
           updateDraft({ lumpDiscount: result.value });
       } else if (result.type === 'pair') {
-          // Важно: скидка на пару вводится в mainCurrency, конвертируем в USD для хранения в item
           const discountInUSD = convertToUSD(result.value || 0, mainCurrency, settings?.exchangeRates);
           const newCart = cart.map((item, idx) => {
               if (result.indices.includes(idx)) {
@@ -175,15 +168,12 @@ const NewOrderPage = ({
           updateDraft({ cart: newCart });
       }
   };
-
   const handlePhoneChange = (e) => {
     const raw = e.target.value;
     const formatted = formatPhoneNumber(raw);
     updateDraft({ clientPhone: formatted });
     setShowClientList(true);
   };
-  
-  // ... (useEffects и handlers для клиента, добавления товара, редактирования - без изменений, см. ниже полный код)
   useEffect(() => {
     const cleanInput = normalizePhone(clientPhone);
     if (!cleanInput) { updateDraft({ selectedClient: null }); return; }
@@ -223,10 +213,7 @@ const NewOrderPage = ({
     if (!currentM) return;
     const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
     if (totalQty === 0) { triggerToast("Укажите количество", 'error'); return; }
-    
-    // Форматирование: добавляем пробел перед скобкой
     const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s} (${q})`);
-    
     const note = noteParts.join(', ');
     updateDraft({ cart: [...cart, { ...currentM, modelId: currentM.id, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: 0, total: currentM.price * totalQty }] });
     setSizeQuantities({}); setSelModel(''); setSearch(''); setShowModelList(false);
@@ -248,7 +235,6 @@ const NewOrderPage = ({
       const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s} (${q})`);
       const note = noteParts.join(', ');
       
-      // Конвертируем введенную скидку в USD
       const discountUSD = convertToUSD(parseFloat(editingDiscount) || 0, mainCurrency, settings.exchangeRates);
 
       const updatedItem = { ...item, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: discountUSD, total: (item.price - discountUSD) * totalQty };
@@ -289,11 +275,28 @@ const NewOrderPage = ({
     } catch(e) { triggerToast("Ошибка сохранения заказа", 'error'); }
   };
 
+  const filteredM = models.filter(m => m.sku.toLowerCase().includes(search.toLowerCase()) || m.color.toLowerCase().includes(search.toLowerCase()));
+  const filteredClients = useMemo(() => {
+     if (clientPhone.length < 2) return [];
+     const search = normalizePhone(clientPhone);
+     return clients.filter(c => {
+        const dbPhone = normalizePhone(c.phone);
+        if (selectedClient && c.id === selectedClient.id) return false;
+        if (dbPhone.includes(search)) return true;
+        if (search.startsWith('0') && dbPhone.includes('38' + search)) return true;
+        return false;
+     });
+  }, [clients, clientPhone, selectedClient]);
+  const minSize = parseInt(sizeGrid?.min);
+  const maxSize = parseInt(sizeGrid?.max);
+  const rangeLength = Math.max(0, maxSize - minSize + 1);
+  const sizeRange = (isNaN(minSize) || isNaN(maxSize)) ? [] : Array.from({ length: rangeLength }, (_, i) => minSize + i);
   const currentTotalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
+  const currentTotalSumUSD = currentM ? currentM.price * currentTotalQty : 0;
 
   // --- RENDER ---
   if (showInvoice) {
-      // Собираем объект для превью, похожий на сохраненный
+      // Собираем объект для превью
       const orderForPreview = {
           id: orders.length + 1, 
           date: new Date(),
@@ -307,6 +310,7 @@ const NewOrderPage = ({
           order={orderForPreview}
           settings={settings} 
           onBack={() => setShowInvoice(false)}
+          nextOrderId={orders.length + 1}
       />;
   }
 
@@ -412,6 +416,11 @@ const NewOrderPage = ({
                     <div className="text-sm font-bold text-blue-900">
                         Итого: {currentTotalQty} {getNoun(currentTotalQty, 'пара', 'пары', 'пар')}
                     </div>
+                    {currentTotalQty > 0 && (
+                        <div className="text-sm font-bold text-green-600">
+                            ({convertPrice(currentTotalSumUSD, mainCurrency, settings.exchangeRates)} {mainCurrency})
+                        </div>
+                    )}
                 </div>
                 <Button onClick={addToCart} size="md" icon={Plus} className="h-[46px] px-8">В заказ</Button>
               </div>

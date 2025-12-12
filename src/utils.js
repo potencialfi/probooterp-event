@@ -1,8 +1,10 @@
+// Очистка номера телефона
 export const normalizePhone = (phone) => String(phone).replace(/\D/g, '');
 
+// Форматирование телефона
 export const formatPhoneNumber = (value) => {
   if (!value) return '';
-  const digits = value.replace(/\D/g, '');
+  const digits = String(value).replace(/\D/g, '');
   let clean = digits;
   
   if (digits.length === 10 && digits.startsWith('0')) {
@@ -15,6 +17,7 @@ export const formatPhoneNumber = (value) => {
   return value; 
 };
 
+// Склонение слов
 export const getNoun = (number, one, two, five) => {
   let n = Math.abs(number);
   n %= 100;
@@ -27,19 +30,20 @@ export const getNoun = (number, one, two, five) => {
 
 // Конвертация цены из USD (база) в целевую валюту
 export const convertPrice = (priceInUSD, currency, rates) => {
-  if (currency === 'USD') return Number(priceInUSD).toFixed(2);
+  if (!currency || currency === 'USD') return Number(priceInUSD).toFixed(2);
   const rate = rates?.[currency.toLowerCase()] || 1;
   return (priceInUSD * rate).toFixed(2);
 };
 
-// Конвертация в USD (база) из другой валюты
+// Конвертация в USD (база) из другой валюты (БЕЗОПАСНАЯ ВЕРСИЯ)
 export const convertToUSD = (amount, currency, rates) => {
-  if (currency === 'USD') return Number(amount);
+  if (!amount) return 0;
+  if (!currency || currency === 'USD') return Number(amount);
   const rate = rates?.[currency.toLowerCase()] || 1;
-  return amount / rate;
+  return Number(amount) / rate;
 };
 
-// Используем коды вместо символов
+// Коды валют
 export const CURRENCY_CODES = { USD: 'USD', EUR: 'EUR', UAH: 'UAH' };
 
 // --- Excel Helpers ---
