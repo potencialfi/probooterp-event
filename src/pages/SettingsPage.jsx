@@ -7,11 +7,14 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
   const [activeBoxTab, setActiveBoxTab] = useState('6');
   const [boxTemplates, setBoxTemplates] = useState(settings?.boxTemplates || { 6:{}, 8:{}, 10:{}, 12:{} });
   const [rates, setRates] = useState(settings?.exchangeRates || { usd: 0, eur: 0, isManual: false });
+  // Добавляем локальное состояние для основной валюты
+  const [mainCurrency, setMainCurrency] = useState(settings?.mainCurrency || 'USD');
 
   useEffect(() => {
     if(settings?.boxTemplates) setBoxTemplates(settings.boxTemplates);
     if(settings?.exchangeRates) setRates(settings.exchangeRates);
     else fetchNBU(); 
+    if(settings?.mainCurrency) setMainCurrency(settings.mainCurrency);
   }, [settings]);
 
   const fetchNBU = async () => {
@@ -34,6 +37,14 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
      const newSettings = { ...settings, exchangeRates: newRates };
      setSettings(newSettings);
      await apiCall('/settings', 'POST', { exchangeRates: newRates });
+  };
+
+  const saveMainCurrency = async (currency) => {
+      setMainCurrency(currency);
+      const newSettings = { ...settings, mainCurrency: currency };
+      setSettings(newSettings);
+      await apiCall('/settings', 'POST', { mainCurrency: currency });
+      triggerToast(`Основная валюта: ${currency}`);
   };
 
   const handleRateChange = (curr, val) => {
@@ -79,42 +90,45 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
 
   const minSize = parseInt(sizeGrid?.min);
   const maxSize = parseInt(sizeGrid?.max);
-  
-  if (isNaN(minSize) || isNaN(maxSize)) {
-    return (
-        <div className="flex flex-col items-center justify-center h-full p-10 text-gray-500 space-y-4">
-            <Settings size={48} className="opacity-20"/>
-            <p>Пожалуйста, укажите диапазон размеров (Min/Max).</p>
-            <div className="flex gap-4">
-                <Input label="Min" type="number" value={sizeGrid?.min || ''} onChange={e => updateGrid('min', e.target.value)} />
-                <Input label="Max" type="number" value={sizeGrid?.max || ''} onChange={e => updateGrid('max', e.target.value)} />
-            </div>
-        </div>
-    );
-  }
-  
   const rangeLength = Math.max(0, maxSize - minSize + 1);
-  const sizeRange = Array.from({ length: rangeLength }, (_, i) => minSize + i);
+  const sizeRange = (isNaN(minSize) || isNaN(maxSize)) ? [] : Array.from({ length: rangeLength }, (_, i) => minSize + i);
 
   return (
     <div className="space-y-6 animate-fade-in">
        <div className="flex justify-between items-start">
            <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Настройки</h2>
-           {/* Exchange Rates Block */}
-           <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-500">USD:</span>
-                    <input className="w-16 border rounded px-1 py-0.5 text-center font-bold" type="number" value={rates.usd} onChange={e=>handleRateChange('usd', e.target.value)}/>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-500">EUR:</span>
-                    <input className="w-16 border rounded px-1 py-0.5 text-center font-bold" type="number" value={rates.eur} onChange={e=>handleRateChange('eur', e.target.value)}/>
-                </div>
-                <div className="flex items-center gap-2 text-gray-400">
-                    <span className="font-bold">Cross:</span>
-                    <span>{(rates.eur / rates.usd || 0).toFixed(2)}</span>
-                </div>
-                <button onClick={resetRates} className="text-blue-500 hover:text-blue-700" title="Сбросить к НБУ"><RefreshCw size={14}/></button>
+           
+           <div className="flex gap-4">
+                {/* Выбор основной валюты */}
+               <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center gap-2 text-sm">
+                    <span className="font-bold text-gray-500">Валюта:</span>
+                    <select 
+                        className="font-bold text-blue-600 bg-transparent outline-none cursor-pointer"
+                        value={mainCurrency}
+                        onChange={(e) => saveMainCurrency(e.target.value)}
+                    >
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="UAH">UAH (₴)</option>
+                    </select>
+               </div>
+
+               {/* Курсы валют */}
+               <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-500">USD:</span>
+                        <input className="w-16 border rounded px-1 py-0.5 text-center font-bold" type="number" value={rates.usd} onChange={e=>handleRateChange('usd', e.target.value)}/>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-500">EUR:</span>
+                        <input className="w-16 border rounded px-1 py-0.5 text-center font-bold" type="number" value={rates.eur} onChange={e=>handleRateChange('eur', e.target.value)}/>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-400">
+                        <span className="font-bold">Cross:</span>
+                        <span>{(rates.eur / rates.usd || 0).toFixed(2)}</span>
+                    </div>
+                    <button onClick={resetRates} className="text-blue-500 hover:text-blue-700" title="Сбросить к НБУ"><RefreshCw size={14}/></button>
+               </div>
            </div>
        </div>
        

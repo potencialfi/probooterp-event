@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { Search, Upload, Download, Plus, Edit, Trash2 } from 'lucide-react';
 import { apiCall } from '../api';
-import { handleExportExcel } from '../utils';
+import { handleExportExcel, convertPrice, CURRENCY_SYMBOLS } from '../utils';
 import { Button, Input, Modal } from '../components/UI';
 
-const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAllData, setImportResult }) => {
+const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAllData, setImportResult, settings }) => {
   const [newModel, setNewModel] = useState({ sku: '', color: '', price: '' });
   const [errors, setErrors] = useState({});
   const [delId, setDelId] = useState(null);
   const [editM, setEditM] = useState(null);
   const [skuFilter, setSkuFilter] = useState('');
+
+  const mainCurrency = settings?.mainCurrency || 'USD';
+  const currencySymbol = CURRENCY_SYMBOLS[mainCurrency];
 
   const validate = () => {
     const errs = {};
@@ -94,17 +97,20 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider"><tr><th className="p-4 font-semibold">Артикул</th><th className="p-4 font-semibold">Цвет</th><th className="p-4 text-right font-semibold">Цена</th><th className="p-4 text-center font-semibold">Действия</th></tr></thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map(m => (
+              {filtered.map(m => {
+                // Конвертируем цену для отображения (в БД всегда USD)
+                const displayPrice = convertPrice(m.price, mainCurrency, settings.exchangeRates);
+                return (
                 <tr key={m.id} className="hover:bg-gray-50/80 transition-colors group">
                   <td className="p-4 font-mono font-bold text-gray-700">{m.sku}</td>
                   <td className="p-4 text-gray-600">{m.color}</td>
-                  <td className="p-4 text-right font-bold text-green-600">{m.price} USD</td>
+                  <td className="p-4 text-right font-bold text-green-600">{displayPrice} {currencySymbol}</td>
                   <td className="p-4 flex justify-center gap-2">
                     <button onClick={() => setEditM({...m})} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors"><Edit size={18}/></button>
                     <button onClick={() => setDelId(m.id)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"><Trash2 size={18}/></button>
                   </td>
                 </tr>
-              ))}
+              )})}
                {filtered.length === 0 && <tr><td colSpan="4" className="p-12 text-center text-gray-400">Модели не найдены</td></tr>}
             </tbody>
           </table>

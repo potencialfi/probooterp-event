@@ -25,7 +25,8 @@ const DEFAULT_DATA = {
   settings: { 
     sizeGrid: { min: "", max: "" },
     boxTemplates: { 6:{}, 8:{}, 10:{}, 12:{} },
-    exchangeRates: { usd: 0, eur: 0, isManual: false } // New field for rates
+    exchangeRates: { usd: 0, eur: 0, isManual: false },
+    mainCurrency: 'USD'
   }
 };
 
@@ -56,6 +57,7 @@ const initDB = () => {
   if (!db.settings.sizeGrid) { db.settings.sizeGrid = DEFAULT_DATA.settings.sizeGrid; changed = true; }
   if (!db.settings.boxTemplates) { db.settings.boxTemplates = DEFAULT_DATA.settings.boxTemplates; changed = true; }
   if (!db.settings.exchangeRates) { db.settings.exchangeRates = DEFAULT_DATA.settings.exchangeRates; changed = true; }
+  if (!db.settings.mainCurrency) { db.settings.mainCurrency = DEFAULT_DATA.settings.mainCurrency; changed = true; }
   
   if (changed) writeDB(db);
 };
@@ -98,11 +100,11 @@ app.get('/api/data', (req, res) => {
   const db = readDB();
   if (!db) return res.json(DEFAULT_DATA);
   
-  // Ensure settings exist in response even if missing in DB
   const safeSettings = {
       sizeGrid: db.settings?.sizeGrid || DEFAULT_DATA.settings.sizeGrid,
       boxTemplates: db.settings?.boxTemplates || DEFAULT_DATA.settings.boxTemplates,
-      exchangeRates: db.settings?.exchangeRates || DEFAULT_DATA.settings.exchangeRates
+      exchangeRates: db.settings?.exchangeRates || DEFAULT_DATA.settings.exchangeRates,
+      mainCurrency: db.settings?.mainCurrency || DEFAULT_DATA.settings.mainCurrency
   };
 
   const { users, settings, ...rest } = db;
@@ -114,16 +116,15 @@ app.post('/api/settings', (req, res) => {
   db.settings = {
       ...db.settings,
       ...req.body,
-      // Ensure we don't lose nested keys during merge
       sizeGrid: req.body.sizeGrid || db.settings.sizeGrid || DEFAULT_DATA.settings.sizeGrid,
       boxTemplates: req.body.boxTemplates || db.settings.boxTemplates || DEFAULT_DATA.settings.boxTemplates,
-      exchangeRates: req.body.exchangeRates || db.settings.exchangeRates || DEFAULT_DATA.settings.exchangeRates
+      exchangeRates: req.body.exchangeRates || db.settings.exchangeRates || DEFAULT_DATA.settings.exchangeRates,
+      mainCurrency: req.body.mainCurrency || db.settings.mainCurrency || DEFAULT_DATA.settings.mainCurrency
   };
   writeDB(db);
   res.json({ success: true, settings: db.settings });
 });
 
-// --- PROXY FOR NBU (To avoid CORS issues on frontend) ---
 app.get('/api/nbu-rates', async (req, res) => {
     try {
         const response = await fetch('https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json');

@@ -21,8 +21,8 @@ export const Button = ({ children, onClick, variant = 'primary', size = 'md', cl
   );
 };
 
-export const Input = ({ label, error, icon: Icon, ...props }) => (
-  <div className="flex flex-col gap-1.5 w-full text-left relative">
+export const Input = ({ label, error, icon: Icon, className, ...props }) => (
+  <div className={`flex flex-col gap-1.5 w-full text-left relative ${className}`}>
     {label && <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</label>}
     <div className="relative">
       {Icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Icon size={18} /></div>}

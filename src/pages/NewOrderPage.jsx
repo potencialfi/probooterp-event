@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, ShoppingCart, User, Phone, MapPin, AlertTriangle, Box, Eraser, Edit, Trash2, CreditCard, DollarSign } from 'lucide-react';
+import { Search, Plus, ShoppingCart, User, Phone, MapPin, AlertTriangle, Box, Eraser, Edit, Trash2, CreditCard } from 'lucide-react';
 import { apiCall } from '../api';
-import { normalizePhone, formatPhoneNumber, getNoun } from '../utils';
+import { normalizePhone, formatPhoneNumber, getNoun, convertPrice, CURRENCY_SYMBOLS } from '../utils';
 import { Button, Input, Modal } from '../components/UI';
 
 const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders, triggerToast, settings }) => {
@@ -24,10 +24,17 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
   const [prepayment, setPrepayment] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState(settings?.mainCurrency || 'USD');
 
-  // Расчет суммы заказа в выбранной валюте для подсказки
+  // Основная валюта приложения
+  const mainCurrency = settings?.mainCurrency || 'USD';
+  const mainSymbol = CURRENCY_SYMBOLS[mainCurrency];
+
+  // Расчет курсов
   const totalCartUSD = cart.reduce((acc, i) => acc + i.total, 0);
-  const currentRate = settings?.exchangeRates?.[paymentCurrency.toLowerCase()] || 1;
-  const totalInPaymentCurrency = (totalCartUSD * currentRate).toFixed(2);
+  
+  // Расчет суммы предоплаты (подсказка полной суммы)
+  // Мы пересчитываем общую сумму заказа из USD в валюту ОПЛАТЫ, которую выбрал пользователь
+  const paymentRate = settings?.exchangeRates?.[paymentCurrency.toLowerCase()] || 1;
+  const fullAmountInPaymentCurrency = (totalCartUSD * paymentRate).toFixed(2);
 
   const handlePhoneChange = (e) => {
     const raw = e.target.value;
@@ -103,7 +110,7 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
         qty: totalQty, 
         note,
         sizes: sizeQuantities,
-        total: currentM.price * totalQty 
+        total: currentM.price * totalQty // total in USD
     }]);
     
     setSizeQuantities({}); setSelModel(''); setSearch(''); setShowModelList(false);
@@ -127,12 +134,12 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
         date: new Date().toISOString(), 
         clientId: parseInt(finalClientId), 
         items: cart, 
-        total: totalCartUSD,
+        total: totalCartUSD, // Total USD
         payment: {
             prepayment: Number(prepayment),
             currency: paymentCurrency,
-            totalInCurrency: Number(totalInPaymentCurrency),
-            rate: currentRate
+            rate: paymentRate,
+            totalInPaymentCurrency: Number(fullAmountInPaymentCurrency)
         }
     };
 
@@ -193,7 +200,7 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
 
         {/* Model Selection */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
-          <div className="flex items-center gap-2 mb-2 text-blue-900 border-b border-gray-100 pb-2"><ShoppingShoppingCart size={20} /><h3 className="font-bold text-lg">Товары</h3></div>
+          <div className="flex items-center gap-2 mb-2 text-blue-900 border-b border-gray-100 pb-2"><ShoppingCart size={20} /><h3 className="font-bold text-lg">Товары</h3></div>
           <div className="relative">
             <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
             <input 
@@ -207,7 +214,10 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
               <div className="border border-gray-100 rounded-xl mt-2 max-h-60 overflow-y-auto bg-white shadow-xl absolute w-full z-20 custom-scrollbar">
                 {filteredM.map(m => (
                   <div key={m.id} onClick={() => { setSelModel(m.id); setSearch(m.sku); setShowModelList(false); }} className="p-3 px-4 cursor-pointer hover:bg-blue-50 border-b border-gray-50 last:border-0 flex justify-between items-center transition-colors">
-                    <div><span className="font-bold text-gray-800">{m.sku}</span> <span className="text-gray-300 mx-2">|</span> <span className="text-gray-600">{m.color}</span></div><span className="font-bold text-green-600 bg-green-50 px-2 py-1 rounded text-sm">{m.price} USD</span>
+                    <div><span className="font-bold text-gray-800">{m.sku}</span> <span className="text-gray-300 mx-2">|</span> <span className="text-gray-600">{m.color}</span></div>
+                    <span className="font-bold text-green-600 bg-green-50 px-2 py-1 rounded text-sm">
+                        {convertPrice(m.price, mainCurrency, settings.exchangeRates)} {mainSymbol}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -217,7 +227,10 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
           {currentM && (
             <div className="bg-blue-50/30 p-6 rounded-xl border border-blue-100 animate-fade-in">
               <div className="font-bold text-xl text-blue-900 border-b border-blue-100 pb-3 mb-4 flex justify-between items-center">
-                <span>{currentM.sku} / {currentM.color}</span><span className="text-green-600 bg-green-50 px-3 py-1 rounded-lg">{currentM.price} USD</span>
+                <span>{currentM.sku} / {currentM.color}</span>
+                <span className="text-green-600 bg-green-50 px-3 py-1 rounded-lg">
+                    {convertPrice(currentM.price, mainCurrency, settings.exchangeRates)} {mainSymbol}
+                </span>
               </div>
               
               {sizeRange.length === 0 ? (
@@ -262,12 +275,15 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
             <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between group hover:border-blue-200 transition-colors hover:shadow-sm">
               <div>
                 <div className="font-bold text-gray-800 text-sm">{i.sku} <span className="font-normal text-gray-500">({i.color})</span></div>
-                <div className="text-xs text-gray-500 mt-1">{i.qty} {getNoun(i.qty, 'пара', 'пары', 'пар')} x {i.price} USD
+                <div className="text-xs text-gray-500 mt-1">{i.qty} {getNoun(i.qty, 'пара', 'пары', 'пар')}
                    {i.note && <div className="mt-1 flex flex-wrap gap-1">{i.note.split(', ').map((n, ni) => (<span key={ni} className="bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px] font-bold text-gray-600 shadow-sm">{n}</span>))}</div>}
                 </div>
               </div>
               <div className="text-right flex flex-col justify-between items-end">
-                <div className="font-bold text-gray-800">{i.total} USD</div>
+                {/* Отображаем цену в основной валюте */}
+                <div className="font-bold text-gray-800">
+                    {convertPrice(i.total, mainCurrency, settings.exchangeRates)} {mainSymbol}
+                </div>
                 <div className="flex gap-2 mt-1">
                    <button onClick={() => setConfirmDeleteIndex(idx)} className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded"><Trash2 size={16}/></button>
                 </div>
@@ -293,6 +309,7 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
                         onChange={e => setPrepayment(e.target.value)}
                     />
                  </div>
+                 {/* Выбор валюты оплаты */}
                  <select 
                     className="border border-gray-200 rounded-lg px-2 bg-white font-bold text-gray-700 focus:border-green-500 focus:outline-none"
                     value={paymentCurrency}
@@ -304,13 +321,17 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
                  </select>
              </div>
              <div className="text-right text-xs text-green-700 font-medium">
-                 Полная сумма: <span className="font-bold text-base">{totalInPaymentCurrency} {paymentCurrency}</span>
-                 <br/><span className="text-green-500/70">Курс: {currentRate}</span>
+                 Полная сумма заказа: <span className="font-bold text-base">{fullAmountInPaymentCurrency} {paymentCurrency}</span>
+                 <br/><span className="text-green-500/70">Курс: {paymentRate}</span>
              </div>
           </div>
 
           <div className="flex justify-between font-bold text-xl text-gray-800">
-            <span>Итого:</span><span className="text-blue-600">${totalCartUSD} USD</span>
+            <span>Итого:</span>
+            {/* Итого показываем в ОСНОВНОЙ валюте, а не в валюте оплаты (для единообразия интерфейса) */}
+            <span className="text-blue-600">
+                {convertPrice(totalCartUSD, mainCurrency, settings.exchangeRates)} {mainSymbol}
+            </span>
           </div>
           <Button onClick={saveOrder} variant="success" className="w-full py-4 text-lg shadow-xl shadow-green-100 hover:shadow-green-200 transform hover:-translate-y-1 transition-all">Оформить заказ</Button>
         </div>

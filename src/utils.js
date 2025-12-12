@@ -25,6 +25,15 @@ export const getNoun = (number, one, two, five) => {
   return five;
 };
 
+// Конвертация цены из USD в целевую валюту
+export const convertPrice = (priceInUSD, currency, rates) => {
+  if (currency === 'USD') return priceInUSD;
+  const rate = rates?.[currency.toLowerCase()] || 1;
+  return (priceInUSD * rate).toFixed(2);
+};
+
+export const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', UAH: '₴' };
+
 // --- Excel Helpers ---
 export async function ensureXLSX() {
   if (window.XLSX) return window.XLSX;
