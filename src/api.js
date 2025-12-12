@@ -1,4 +1,6 @@
 export const API_URL = 'http://localhost:3001/api';
+// Адрес для картинок
+export const IMG_URL = 'http://localhost:3001/images';
 
 export const apiCall = async (endpoint, method = 'GET', body = null) => {
   const options = {
@@ -24,4 +26,23 @@ export const apiCall = async (endpoint, method = 'GET', body = null) => {
   } catch (err) {
     throw err;
   }
+};
+
+export const uploadBrandLogo = async (file, brandName) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+            try {
+                const res = await apiCall('/upload-logo', 'POST', {
+                    image: reader.result,
+                    brandName: brandName
+                });
+                resolve(res.fileName);
+            } catch (e) {
+                reject(e);
+            }
+        };
+        reader.onerror = error => reject(error);
+    });
 };

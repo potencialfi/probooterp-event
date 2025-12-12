@@ -1,25 +1,45 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Box, RefreshCw } from 'lucide-react';
+import { Settings, Box, RefreshCw, Briefcase, Plus, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
 import { Input, Button } from '../components/UI';
-import { API_URL } from '../api';
+import { API_URL, uploadBrandLogo, IMG_URL } from '../api';
+import { formatPhoneNumber } from '../utils'; // Импортируем форматтер
 
 const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, setSettings, highlightSetting, setHighlightSetting }) => {
   const [activeBoxTab, setActiveBoxTab] = useState('6');
   const [boxTemplates, setBoxTemplates] = useState(settings?.boxTemplates || { 6:{}, 8:{}, 10:{}, 12:{} });
   const [rates, setRates] = useState(settings?.exchangeRates || { usd: 0, eur: 0, isManual: false });
   const [mainCurrency, setMainCurrency] = useState(settings?.mainCurrency || 'USD');
+  
+  // Brand Settings
+  const [brandName, setBrandName] = useState(settings?.brandName || 'SHOE EXPO');
+  const [phones, setPhones] = useState(settings?.brandPhones || []);
+  const [newPhone, setNewPhone] = useState('');
+  const fileInputRef = useRef(null);
 
-  // Ref для блока курсов для подсветки
   const ratesRef = useRef(null);
 
   useEffect(() => {
-    if(settings?.boxTemplates) setBoxTemplates(settings.boxTemplates);
-    if(settings?.exchangeRates) setRates(settings.exchangeRates);
-    else fetchNBU(); 
-    if(settings?.mainCurrency) setMainCurrency(settings.mainCurrency);
+    if(settings) {
+        if(settings.boxTemplates) setBoxTemplates(settings.boxTemplates);
+        if(settings.exchangeRates) setRates(settings.exchangeRates);
+        else fetchNBU(); 
+        if(settings.mainCurrency) setMainCurrency(settings.mainCurrency);
+        if(settings.brandPhones) setPhones(settings.brandPhones);
+        // brandName обновляется отдельно через debounce
+    }
   }, [settings]);
 
-  // Эффект для подсветки при переходе с кнопки редактирования
+  // АВТОСОХРАНЕНИЕ БРЕНДА (Debounce)
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          if (brandName !== settings?.brandName) {
+              apiCall('/settings', 'POST', { brandName });
+              setSettings(prev => ({ ...prev, brandName }));
+          }
+      }, 800);
+      return () => clearTimeout(timer);
+  }, [brandName, settings, setSettings]);
+
   useEffect(() => {
       if (highlightSetting === 'rates' && ratesRef.current) {
           ratesRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -61,10 +81,61 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
       triggerToast(`Основная валюта: ${currency}`);
   };
 
+  const handleLogoUpload = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      try {
+          const fileName = await uploadBrandLogo(file, brandName || 'Brand');
+          const newSettings = { ...settings, brandLogo: fileName };
+          setSettings(newSettings);
+          await apiCall('/settings', 'POST', { brandLogo: fileName });
+          triggerToast("Логотип загружен");
+      } catch (e) {
+          console.error(e);
+          triggerToast("Ошибка загрузки логотипа", "error");
+      }
+  };
+
+  const deleteLogo = async () => {
+      const newSettings = { ...settings, brandLogo: null };
+      setSettings(newSettings);
+      await apiCall('/settings', 'POST', { brandLogo: null });
+      triggerToast("Логотип удален");
+  };
+
+  const savePhones = async (updatedPhones) => {
+      setPhones(updatedPhones);
+      setSettings(prev => ({ ...prev, brandPhones: updatedPhones }));
+      await apiCall('/settings', 'POST', { brandPhones: updatedPhones });
+  };
+
+  const addPhone = () => {
+      if(newPhone && phones.length < 3) {
+          const updated = [...phones, newPhone];
+          savePhones(updated);
+          setNewPhone('');
+      }
+  };
+
+  const removePhone = (idx) => {
+      const updated = phones.filter((_, i) => i !== idx);
+      savePhones(updated);
+  };
+  
+  // Обработчик изменения телефона с форматированием
+  const handlePhoneInput = (e) => {
+      const formatted = formatPhoneNumber(e.target.value);
+      setNewPhone(formatted);
+  };
+
   const handleRateChange = (curr, val) => {
-      const newRates = { ...rates, [curr]: Number(val), isManual: true };
+      const numVal = val === '' ? '' : Number(val);
+      const newRates = { ...rates, [curr]: numVal, isManual: true };
       setRates(newRates);
-      saveRates(newRates);
+      if (val !== '') {
+          saveRates({ ...rates, [curr]: Number(val), isManual: true });
+      }
   };
 
   const resetRates = async () => {
@@ -108,7 +179,7 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
   const sizeRange = (isNaN(minSize) || isNaN(maxSize)) ? [] : Array.from({ length: rangeLength }, (_, i) => minSize + i);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in pb-10">
        <div className="flex justify-between items-start">
            <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Настройки</h2>
            
@@ -126,15 +197,26 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
                     </select>
                </div>
 
-               {/* Курсы валют с рефом для подсветки */}
                <div ref={ratesRef} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4 text-sm transition-all duration-300">
                     <div className="flex items-center gap-2">
                         <span className="font-bold text-gray-500">USD:</span>
-                        <input className="w-16 border rounded px-1 py-0.5 text-center font-bold" type="number" value={rates.usd} onChange={e=>handleRateChange('usd', e.target.value)}/>
+                        <input 
+                            className="w-16 border rounded px-1 py-0.5 text-center font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            type="number" 
+                            value={rates.usd} 
+                            onFocus={(e) => e.target.select()} 
+                            onChange={e=>handleRateChange('usd', e.target.value)}
+                        />
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="font-bold text-gray-500">EUR:</span>
-                        <input className="w-16 border rounded px-1 py-0.5 text-center font-bold" type="number" value={rates.eur} onChange={e=>handleRateChange('eur', e.target.value)}/>
+                        <input 
+                            className="w-16 border rounded px-1 py-0.5 text-center font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            type="number" 
+                            value={rates.eur} 
+                            onFocus={(e) => e.target.select()} 
+                            onChange={e=>handleRateChange('eur', e.target.value)}
+                        />
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
                         <span className="font-bold">Cross:</span>
@@ -144,13 +226,71 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
                </div>
            </div>
        </div>
+
+       {/* Настройки Бренда */}
+       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+           <div className="flex items-center gap-3 mb-6 text-blue-900 border-b border-gray-100 pb-4">
+               <Briefcase size={24} className="text-blue-600"/>
+               <h3 className="font-bold text-lg">Настройки Бренда</h3>
+           </div>
+           
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+               <div className="space-y-4">
+                   <Input label="Название бренда" value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="Например: SHOE EXPO" />
+                   
+                   <div>
+                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 block">Телефоны (макс 3)</label>
+                       {phones.map((phone, idx) => (
+                           <div key={idx} className="flex gap-2 mb-2">
+                               <input className="border rounded-xl px-4 py-2 w-full bg-gray-50" value={phone} readOnly />
+                               <button onClick={() => removePhone(idx)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={18}/></button>
+                           </div>
+                       ))}
+                       {phones.length < 3 && (
+                           <div className="flex gap-2">
+                               <input 
+                                   className="border rounded-xl px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" 
+                                   placeholder="+380..." 
+                                   value={newPhone} 
+                                   onChange={handlePhoneInput} // Форматирование на лету
+                               />
+                               <Button onClick={addPhone} size="compact" icon={Plus}>Добавить</Button>
+                           </div>
+                       )}
+                   </div>
+               </div>
+
+               <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl p-6 bg-gray-50/50">
+                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-4">Логотип бренда</label>
+                   {settings?.brandLogo ? (
+                       <div className="relative group">
+                           <img src={`${IMG_URL}/${settings.brandLogo}`} alt="Brand Logo" className="h-32 object-contain mb-4" />
+                           <button onClick={deleteLogo} className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                       </div>
+                   ) : (
+                       <div className="h-32 w-full flex flex-col items-center justify-center text-gray-400 mb-4">
+                           <ImageIcon size={48} className="mb-2 opacity-50"/>
+                           <span className="text-sm">Логотип не загружен</span>
+                       </div>
+                   )}
+                   <input 
+                       type="file" 
+                       ref={fileInputRef} 
+                       hidden 
+                       accept="image/*" 
+                       onChange={handleLogoUpload}
+                   />
+                   <Button onClick={() => fileInputRef.current.click()} variant="secondary" icon={Upload}>Загрузить лого</Button>
+               </div>
+           </div>
+       </div>
        
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-3 mb-6 text-blue-900 border-b border-gray-100 pb-4"><Settings size={24} className="text-blue-600"/><h3 className="font-bold text-lg">Размерная сетка</h3></div>
               <div className="grid grid-cols-2 gap-6">
-                <Input label="Минимальный размер" type="number" value={sizeGrid?.min || ''} onChange={e => updateGrid('min', e.target.value)} />
-                <Input label="Максимальный размер" type="number" value={sizeGrid?.max || ''} onChange={e => updateGrid('max', e.target.value)} />
+                <Input label="Минимальный размер" type="number" value={sizeGrid?.min || ''} onChange={e => updateGrid('min', e.target.value)} onFocus={(e) => e.target.select()} />
+                <Input label="Максимальный размер" type="number" value={sizeGrid?.max || ''} onChange={e => updateGrid('max', e.target.value)} onFocus={(e) => e.target.select()} />
               </div>
           </div>
 
@@ -180,6 +320,7 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
                            min="0"
                            className="w-full border border-gray-300 rounded p-2 text-center focus:ring-2 focus:ring-blue-500 outline-none"
                            value={boxTemplates[activeBoxTab]?.[size] || ''}
+                           onFocus={(e) => e.target.select()} 
                            onChange={e => updateBoxTemplate(size, e.target.value)}
                            placeholder="0"
                         />

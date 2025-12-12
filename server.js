@@ -11,10 +11,17 @@ const app = express();
 const PORT = 3001;
 const DB_FILE = path.join(__dirname, 'database.json');
 const DIST_DIR = path.join(__dirname, 'dist');
+const IMAGES_DIR = path.join(__dirname, 'images');
+
+// Создаем папку images, если нет
+if (!fs.existsSync(IMAGES_DIR)) {
+    fs.mkdirSync(IMAGES_DIR, { recursive: true });
+}
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Увеличил лимит для картинок
 app.use(express.static(DIST_DIR));
+app.use('/images', express.static(IMAGES_DIR));
 
 // Default data structure
 const DEFAULT_DATA = {
@@ -26,7 +33,10 @@ const DEFAULT_DATA = {
     sizeGrid: { min: "", max: "" },
     boxTemplates: { 6:{}, 8:{}, 10:{}, 12:{} },
     exchangeRates: { usd: 0, eur: 0, isManual: false },
-    mainCurrency: 'USD'
+    mainCurrency: 'USD',
+    brandName: 'SHOE EXPO',
+    brandPhones: [],
+    brandLogo: null 
   }
 };
 
@@ -51,14 +61,13 @@ const initDB = () => {
     return;
   }
   
-  // Migration logic
   let changed = false;
   if (!db.settings) { db.settings = DEFAULT_DATA.settings; changed = true; }
-  if (!db.settings.sizeGrid) { db.settings.sizeGrid = DEFAULT_DATA.settings.sizeGrid; changed = true; }
-  if (!db.settings.boxTemplates) { db.settings.boxTemplates = DEFAULT_DATA.settings.boxTemplates; changed = true; }
-  if (!db.settings.exchangeRates) { db.settings.exchangeRates = DEFAULT_DATA.settings.exchangeRates; changed = true; }
-  if (!db.settings.mainCurrency) { db.settings.mainCurrency = DEFAULT_DATA.settings.mainCurrency; changed = true; }
-  
+  // Мержим новые поля
+  if (db.settings.brandName === undefined) { db.settings.brandName = DEFAULT_DATA.settings.brandName; changed = true; }
+  if (db.settings.brandPhones === undefined) { db.settings.brandPhones = DEFAULT_DATA.settings.brandPhones; changed = true; }
+  if (db.settings.brandLogo === undefined) { db.settings.brandLogo = DEFAULT_DATA.settings.brandLogo; changed = true; }
+
   if (changed) writeDB(db);
 };
 
@@ -101,10 +110,8 @@ app.get('/api/data', (req, res) => {
   if (!db) return res.json(DEFAULT_DATA);
   
   const safeSettings = {
-      sizeGrid: db.settings?.sizeGrid || DEFAULT_DATA.settings.sizeGrid,
-      boxTemplates: db.settings?.boxTemplates || DEFAULT_DATA.settings.boxTemplates,
-      exchangeRates: db.settings?.exchangeRates || DEFAULT_DATA.settings.exchangeRates,
-      mainCurrency: db.settings?.mainCurrency || DEFAULT_DATA.settings.mainCurrency
+      ...DEFAULT_DATA.settings, 
+      ...db.settings 
   };
 
   const { users, settings, ...rest } = db;
@@ -115,14 +122,44 @@ app.post('/api/settings', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   db.settings = {
       ...db.settings,
-      ...req.body,
-      sizeGrid: req.body.sizeGrid || db.settings.sizeGrid || DEFAULT_DATA.settings.sizeGrid,
-      boxTemplates: req.body.boxTemplates || db.settings.boxTemplates || DEFAULT_DATA.settings.boxTemplates,
-      exchangeRates: req.body.exchangeRates || db.settings.exchangeRates || DEFAULT_DATA.settings.exchangeRates,
-      mainCurrency: req.body.mainCurrency || db.settings.mainCurrency || DEFAULT_DATA.settings.mainCurrency
+      ...req.body
   };
   writeDB(db);
   res.json({ success: true, settings: db.settings });
+});
+
+app.post('/api/upload-logo', (req, res) => {
+    try {
+        const { image, brandName } = req.body;
+        if (!image) return res.status(400).json({ message: "Нет изображения" });
+
+        const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        // Генерируем имя файла: если есть бренд - используем его, иначе default + timestamp
+        const safeBrand = brandName ? brandName.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'brand';
+        const fileName = `${safeBrand}_${Date.now()}.png`;
+        const filePath = path.join(IMAGES_DIR, fileName);
+
+        fs.writeFileSync(filePath, buffer);
+
+        // Обновляем БД
+        const db = readDB();
+        
+        // Удаляем старое лого, если было (опционально, чтобы не засорять)
+        if (db.settings.brandLogo) {
+             const oldPath = path.join(IMAGES_DIR, db.settings.brandLogo);
+             if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+
+        db.settings.brandLogo = fileName;
+        writeDB(db);
+
+        res.json({ success: true, fileName });
+    } catch (e) {
+        console.error("Upload error:", e);
+        res.status(500).json({ message: "Ошибка сохранения файла на сервере" });
+    }
 });
 
 app.get('/api/nbu-rates', async (req, res) => {
@@ -137,24 +174,21 @@ app.get('/api/nbu-rates', async (req, res) => {
     }
 });
 
-// --- CLIENTS ---
+// --- REST OF API (Clients, Models, Orders) ---
 app.post('/api/clients', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const { name, phone, city } = req.body;
   if (!name) return res.status(400).json({ field: 'name', message: "Введите имя" });
   if (!phone) return res.status(400).json({ field: 'phone', message: "Введите телефон" });
   if (!isValidPhone(phone)) return res.status(400).json({ field: 'phone', message: "Некорректный номер" });
-  
   const cleanPhone = normalizePhone(phone);
   const exists = (db.clients || []).find(c => normalizePhone(c.phone) === cleanPhone);
   if (exists) return res.status(400).json({ field: 'phone', message: "Клиент уже существует" });
-
   const newClient = { id: Date.now(), name, city: city || "", phone: formatPhoneNumber(phone) };
   db.clients.push(newClient);
   writeDB(db);
   res.json(newClient);
 });
-
 app.put('/api/clients/:id', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const id = Number(req.params.id);
@@ -164,44 +198,34 @@ app.put('/api/clients/:id', (req, res) => {
     if (!name) return res.status(400).json({ field: 'name', message: "Имя обязательно" });
     if (!phone) return res.status(400).json({ field: 'phone', message: "Телефон обязателен" });
     if (!isValidPhone(phone)) return res.status(400).json({ field: 'phone', message: "Некорректный номер" });
-
     const cleanPhone = normalizePhone(phone);
     const duplicate = db.clients.find(c => c.id !== id && normalizePhone(c.phone) === cleanPhone);
     if (duplicate) return res.status(400).json({ field: 'phone', message: "Номер занят" });
-
     db.clients[index] = { ...db.clients[index], name, city: city || "", phone: formatPhoneNumber(phone) };
     writeDB(db);
     res.json(db.clients[index]);
-  } else {
-    res.status(404).json({ message: "Клиент не найден" });
-  }
+  } else { res.status(404).json({ message: "Клиент не найден" }); }
 });
-
 app.delete('/api/clients/:id', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   db.clients = db.clients.filter(c => c.id !== Number(req.params.id));
   writeDB(db);
   res.json({ success: true });
 });
-
 app.post('/api/clients/import', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const importedData = req.body;
   let added = 0; let updated = 0; const errors = [];
-
   importedData.forEach((item, idx) => {
     const rawName = item.name || item.Name || item.Имя || item.ФИО;
     const rawCity = item.city || item.City || item.Город || "";
     const rawPhone = item.phone || item.Phone || item.Телефон || item.Номер;
-
     if (!rawName || !rawPhone) { errors.push(`Строка ${idx + 2}: Нет имени/телефона`); return; }
     const phoneStr = String(rawPhone);
     if (!isValidPhone(phoneStr)) { errors.push(`Строка ${idx + 2}: Неверный телефон`); return; }
-
     const cleanPhone = normalizePhone(phoneStr);
     const formattedPhone = formatPhoneNumber(phoneStr);
     const existIndex = db.clients.findIndex(c => normalizePhone(c.phone) === cleanPhone);
-
     if (existIndex !== -1) {
       let wasUpdated = false;
       if (db.clients[existIndex].name !== rawName) { db.clients[existIndex].name = rawName; wasUpdated = true; }
@@ -216,8 +240,6 @@ app.post('/api/clients/import', (req, res) => {
   writeDB(db);
   res.json({ added, updated, errors });
 });
-
-// --- MODELS ---
 app.post('/api/models', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const newModel = { ...req.body, id: Date.now() };
@@ -225,7 +247,6 @@ app.post('/api/models', (req, res) => {
   writeDB(db);
   res.json(newModel);
 });
-
 app.put('/api/models/:id', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const id = Number(req.params.id);
@@ -236,30 +257,25 @@ app.put('/api/models/:id', (req, res) => {
     res.json(db.models[index]);
   } else { res.status(404).json({ error: "Not found" }); }
 });
-
 app.delete('/api/models/:id', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   db.models = db.models.filter(m => m.id !== Number(req.params.id));
   writeDB(db);
   res.json({ success: true });
 });
-
 app.post('/api/models/import', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const importedData = req.body;
   let added = 0; let updated = 0; const errors = [];
-
   importedData.forEach((item, idx) => {
     const rawSku = item.sku || item.Артикул;
     const rawColor = item.color || item.Цвет;
     const rawPrice = item.price !== undefined ? item.price : item.Цена;
-
     if (!rawSku || !rawColor || rawPrice === undefined) { errors.push(`Строка ${idx + 2}: Нет полей`); return; }
     const sku = String(rawSku).trim();
     const color = String(rawColor).trim();
     const price = Number(rawPrice);
     const existIndex = db.models.findIndex(m => String(m.sku).toLowerCase() === sku.toLowerCase() && String(m.color).toLowerCase() === color.toLowerCase());
-
     if (existIndex !== -1) {
       if (db.models[existIndex].price !== price) { db.models[existIndex].price = price; updated++; }
     } else {
@@ -270,7 +286,6 @@ app.post('/api/models/import', (req, res) => {
   writeDB(db);
   res.json({ added, updated, errors });
 });
-
 app.post('/api/orders', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   const newOrder = { ...req.body, id: Date.now() };
