@@ -25,14 +25,22 @@ export const getNoun = (number, one, two, five) => {
   return five;
 };
 
-// Конвертация цены из USD в целевую валюту
+// Конвертация цены из USD (база) в целевую валюту
 export const convertPrice = (priceInUSD, currency, rates) => {
-  if (currency === 'USD') return priceInUSD;
+  if (currency === 'USD') return Number(priceInUSD).toFixed(2);
   const rate = rates?.[currency.toLowerCase()] || 1;
   return (priceInUSD * rate).toFixed(2);
 };
 
-export const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', UAH: '₴' };
+// Конвертация в USD (база) из другой валюты
+export const convertToUSD = (amount, currency, rates) => {
+  if (currency === 'USD') return Number(amount);
+  const rate = rates?.[currency.toLowerCase()] || 1;
+  return amount / rate;
+};
+
+// Используем коды вместо символов
+export const CURRENCY_CODES = { USD: 'USD', EUR: 'EUR', UAH: 'UAH' };
 
 // --- Excel Helpers ---
 export async function ensureXLSX() {

@@ -20,11 +20,34 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Данные приложения
   const [clients, setClients] = useState([]);
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
   const [sizeGrid, setSizeGrid] = useState({ min: '', max: '' });
-  const [settings, setSettings] = useState({ sizeGrid: { min: '', max: '' }, boxTemplates: { 6:{}, 8:{}, 10:{}, 12:{} }, exchangeRates: { usd: 0, eur: 0, isManual: false }, mainCurrency: 'USD' });
+  const [settings, setSettings] = useState({ 
+      sizeGrid: { min: '', max: '' }, 
+      boxTemplates: { 6:{}, 8:{}, 10:{}, 12:{} }, 
+      exchangeRates: { usd: 0, eur: 0, isManual: false },
+      mainCurrency: 'USD'
+  });
+
+  // --- ЧЕРНОВИК ЗАКАЗА (State Lift) ---
+  // Храним данные формы заказа здесь, чтобы они не стирались при смене табов
+  const initialOrderState = {
+      cart: [],
+      clientPhone: '',
+      clientName: '',
+      clientCity: '',
+      selectedClient: null,
+      prepayment: '',
+      paymentCurrency: '' // Будет установлено при загрузке настроек
+  };
+  const [orderDraft, setOrderDraft] = useState(initialOrderState);
+
+  // Состояние для подсветки нужного блока в настройках
+  const [highlightSetting, setHighlightSetting] = useState(null);
   
   const [toast, setToast] = useState(null); 
   const [importResult, setImportResult] = useState(null);
@@ -38,6 +61,12 @@ export default function App() {
           if(data.settings) {
              if(data.settings.sizeGrid) setSizeGrid(data.settings.sizeGrid);
              setSettings(prev => ({ ...prev, ...data.settings }));
+             
+             // Если в черновике еще нет валюты, ставим основную
+             setOrderDraft(prev => ({
+                 ...prev,
+                 paymentCurrency: prev.paymentCurrency || data.settings.mainCurrency || 'USD'
+             }));
           }
       } catch (e) { triggerToast('Ошибка подключения', 'error'); } 
   };
@@ -49,6 +78,21 @@ export default function App() {
   }, [user]);
   
   const triggerToast = (msg, type = 'success') => setToast({ message: msg, type });
+  
+  // Функция очистки заказа (передается в NewOrderPage)
+  const clearOrderDraft = () => {
+      setOrderDraft({
+          ...initialOrderState,
+          paymentCurrency: settings.mainCurrency || 'USD'
+      });
+      triggerToast("Форма заказа очищена");
+  };
+
+  // Функция для навигации в настройки с подсветкой (передается в NewOrderPage)
+  const goToSettingsAndHighlight = (section) => {
+      setActiveTab('settings');
+      setHighlightSetting(section);
+  };
   
   const handleFileImport = async (e, endpoint, cb = null) => { 
     const file = e.target.files[0]; 
@@ -85,12 +129,42 @@ export default function App() {
     <div className="flex h-screen bg-slate-50 text-gray-800 font-sans">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLogout={handleLogout} />
       <main className="flex-1 overflow-auto p-6 md:p-10 relative custom-scrollbar">
-        {activeTab === 'dashboard' && <DashboardPage orders={orders} setActiveTab={setActiveTab} />}
-        {activeTab === 'newOrder' && <NewOrderPage clients={clients} setClients={setClients} models={models} sizeGrid={sizeGrid} setOrders={setOrders} orders={orders} triggerToast={triggerToast} settings={settings}/>}
+        {activeTab === 'dashboard' && <DashboardPage orders={orders} setActiveTab={setActiveTab} settings={settings} />}
+        
+        {activeTab === 'newOrder' && (
+            <NewOrderPage 
+                clients={clients} 
+                setClients={setClients} 
+                models={models} 
+                sizeGrid={sizeGrid} 
+                setOrders={setOrders} 
+                orders={orders} 
+                triggerToast={triggerToast} 
+                settings={settings}
+                // Пропсы для сохранения состояния
+                orderDraft={orderDraft}
+                setOrderDraft={setOrderDraft}
+                clearOrderDraft={clearOrderDraft}
+                goToSettingsAndHighlight={goToSettingsAndHighlight}
+            />
+        )}
+        
         {activeTab === 'clients' && <ClientsPage clients={clients} setClients={setClients} triggerToast={triggerToast} handleFileImport={handleFileImport} loadAllData={loadAllData} setImportResult={setImportResult}/>}
         {activeTab === 'models' && <ModelsPage models={models} setModels={setModels} triggerToast={triggerToast} handleFileImport={handleFileImport} loadAllData={loadAllData} setImportResult={setImportResult} settings={settings}/>}
         {activeTab === 'history' && <OrdersPage orders={orders} clients={clients} />}
-        {activeTab === 'settings' && <SettingsPage sizeGrid={sizeGrid} setSizeGrid={setSizeGrid} apiCall={apiCall} triggerToast={triggerToast} settings={settings} setSettings={setSettings} />}
+        
+        {activeTab === 'settings' && (
+            <SettingsPage 
+                sizeGrid={sizeGrid} 
+                setSizeGrid={setSizeGrid} 
+                apiCall={apiCall} 
+                triggerToast={triggerToast} 
+                settings={settings} 
+                setSettings={setSettings} 
+                highlightSetting={highlightSetting}
+                setHighlightSetting={setHighlightSetting}
+            />
+        )}
         
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         <ImportResultModal result={importResult} onClose={() => setImportResult(null)} />

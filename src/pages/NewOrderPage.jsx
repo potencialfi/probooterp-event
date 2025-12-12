@@ -1,71 +1,90 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, ShoppingCart, User, Phone, MapPin, AlertTriangle, Box, Eraser, Edit, Trash2, CreditCard } from 'lucide-react';
 import { apiCall } from '../api';
-import { normalizePhone, formatPhoneNumber, getNoun, convertPrice, CURRENCY_SYMBOLS } from '../utils';
+import { normalizePhone, formatPhoneNumber, getNoun, convertPrice, convertToUSD, CURRENCY_CODES } from '../utils';
 import { Button, Input, Modal } from '../components/UI';
 
-const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders, triggerToast, settings }) => {
+const NewOrderPage = ({ 
+    clients, setClients, models, sizeGrid, setOrders, orders, triggerToast, settings,
+    orderDraft, setOrderDraft, clearOrderDraft, goToSettingsAndHighlight 
+}) => {
+  // Локальные стейты только для UI (поиск, модалки), данные заказа берутся из orderDraft
   const [selModel, setSelModel] = useState(''); 
-  const [cart, setCart] = useState([]);
   const [search, setSearch] = useState('');
   const [showModelList, setShowModelList] = useState(false);
   
   const [sizeQuantities, setSizeQuantities] = useState({});
   const [editingCartIndex, setEditingCartIndex] = useState(null);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
-
-  const [clientPhone, setClientPhone] = useState('');
-  const [clientName, setClientName] = useState('');
-  const [clientCity, setClientCity] = useState('');
-  const [selectedClient, setSelectedClient] = useState(null); 
   const [showClientList, setShowClientList] = useState(false);
 
-  // --- Payment States ---
-  const [prepayment, setPrepayment] = useState('');
-  const [paymentCurrency, setPaymentCurrency] = useState(settings?.mainCurrency || 'USD');
+  // Деструктурируем данные из черновика
+  const { cart, clientPhone, clientName, clientCity, selectedClient, prepayment, paymentCurrency } = orderDraft;
 
   // Основная валюта приложения
   const mainCurrency = settings?.mainCurrency || 'USD';
-  const mainSymbol = CURRENCY_SYMBOLS[mainCurrency];
 
-  // Расчет курсов
+  // Общая сумма корзины в USD (база)
   const totalCartUSD = cart.reduce((acc, i) => acc + i.total, 0);
   
-  // Расчет суммы предоплаты (подсказка полной суммы)
-  // Мы пересчитываем общую сумму заказа из USD в валюту ОПЛАТЫ, которую выбрал пользователь
-  const paymentRate = settings?.exchangeRates?.[paymentCurrency.toLowerCase()] || 1;
+  // Расчет курса для оплаты
+  const getPaymentRate = (targetCurr, rates) => {
+      const t = targetCurr.toUpperCase();
+      const r = rates || { usd: 1, eur: 1 };
+      const usdToUah = r.usd || 1;
+      const eurToUah = r.eur || 1;
+
+      if (t === 'USD') return 1; 
+      if (t === 'UAH') return usdToUah;
+      if (t === 'EUR') return usdToUah / eurToUah; 
+      return 1;
+  };
+
+  const paymentRate = getPaymentRate(paymentCurrency, settings?.exchangeRates);
   const fullAmountInPaymentCurrency = (totalCartUSD * paymentRate).toFixed(2);
+
+  // --- Handlers для обновления черновика ---
+  const updateDraft = (fields) => {
+      setOrderDraft(prev => ({ ...prev, ...fields }));
+  };
 
   const handlePhoneChange = (e) => {
     const raw = e.target.value;
     const formatted = formatPhoneNumber(raw);
-    setClientPhone(formatted);
+    updateDraft({ clientPhone: formatted });
     setShowClientList(true);
   };
 
+  // Поиск клиента при вводе телефона
   useEffect(() => {
     const cleanInput = normalizePhone(clientPhone);
-    if (!cleanInput) { setSelectedClient(null); return; }
+    if (!cleanInput) { updateDraft({ selectedClient: null }); return; }
+    
     const found = clients.find(c => {
        const dbPhone = normalizePhone(c.phone);
        if (dbPhone === cleanInput) return true;
        if (cleanInput.startsWith('0') && dbPhone === '38' + cleanInput) return true;
        return false;
     });
+
     if (found) {
-      setSelectedClient(found);
-      setClientName(found.name);
-      setClientCity(found.city);
+      updateDraft({
+          selectedClient: found,
+          clientName: found.name,
+          clientCity: found.city
+      });
     } else {
-      setSelectedClient(null);
+      updateDraft({ selectedClient: null });
     }
   }, [clientPhone, clients]);
 
   const selectClientSuggestion = (client) => {
-    setClientPhone(client.phone);
-    setClientName(client.name);
-    setClientCity(client.city);
-    setSelectedClient(client);
+    updateDraft({
+        clientPhone: client.phone,
+        clientName: client.name,
+        clientCity: client.city,
+        selectedClient: client
+    });
     setShowClientList(false);
   };
 
@@ -104,17 +123,55 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
     
     const note = noteParts.join(', ');
 
-    setCart([...cart, { 
-        ...currentM, 
-        modelId: currentM.id, 
-        qty: totalQty, 
-        note,
-        sizes: sizeQuantities,
-        total: currentM.price * totalQty // total in USD
-    }]);
+    updateDraft({
+        cart: [...cart, { 
+            ...currentM, 
+            modelId: currentM.id, 
+            qty: totalQty, 
+            note,
+            sizes: sizeQuantities,
+            total: currentM.price * totalQty 
+        }]
+    });
     
     setSizeQuantities({}); setSelModel(''); setSearch(''); setShowModelList(false);
   };
+
+  // Функции редактирования корзины
+  const openEditModal = (index) => {
+      setEditingCartIndex(index);
+      const itemToEdit = cart[index];
+      if (itemToEdit.sizes) { setSizeQuantities({ ...itemToEdit.sizes }); } 
+      else { setSizeQuantities({}); }
+  };
+
+  const saveEditedItem = () => {
+      if (editingCartIndex === null) return;
+      const item = cart[editingCartIndex];
+      const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
+
+      if (totalQty === 0) { triggerToast("Количество не может быть 0", "error"); return; }
+
+      const noteParts = Object.entries(sizeQuantities)
+        .filter(([_, q]) => q > 0)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([s, q]) => `${s}(${q})`);
+    
+      const note = noteParts.join(', ');
+
+      const updatedItem = { ...item, qty: totalQty, note, sizes: sizeQuantities, total: item.price * totalQty };
+      const newCart = [...cart];
+      newCart[editingCartIndex] = updatedItem;
+      updateDraft({ cart: newCart });
+      setEditingCartIndex(null);
+      setSizeQuantities({}); 
+  };
+
+  const deleteFromCart = (index) => {
+      const newCart = cart.filter((_, x) => x !== index);
+      updateDraft({ cart: newCart });
+      setConfirmDeleteIndex(null);
+  }
 
   const saveOrder = async () => {
     if (!clientPhone || !clientName) { triggerToast("Заполните данные клиента", 'error'); return; }
@@ -130,23 +187,31 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
         } catch (e) { triggerToast(`Ошибка клиента: ${e.message}`, 'error'); return; }
     }
 
+    // Сохраняем предоплату в USD для статистики
+    let prepaymentUSD = 0;
+    const r = settings?.exchangeRates || { usd: 1, eur: 1 };
+    if (paymentCurrency === 'USD') prepaymentUSD = Number(prepayment);
+    else if (paymentCurrency === 'UAH') prepaymentUSD = Number(prepayment) / r.usd;
+    else if (paymentCurrency === 'EUR') prepaymentUSD = (Number(prepayment) * r.eur) / r.usd; 
+
     const order = { 
         date: new Date().toISOString(), 
         clientId: parseInt(finalClientId), 
         items: cart, 
-        total: totalCartUSD, // Total USD
+        total: totalCartUSD, // Всегда в USD (база)
         payment: {
-            prepayment: Number(prepayment),
-            currency: paymentCurrency,
-            rate: paymentRate,
-            totalInPaymentCurrency: Number(fullAmountInPaymentCurrency)
+            originalAmount: Number(prepayment),
+            originalCurrency: paymentCurrency,
+            rateAtMoment: paymentRate,
+            prepaymentInUSD: prepaymentUSD
         }
     };
 
     try {
       const saved = await apiCall('/orders', 'POST', order);
       setOrders([saved, ...orders]);
-      setCart([]); setClientPhone(''); setClientName(''); setClientCity(''); setSelectedClient(null); setPrepayment('');
+      // Очищаем черновик только после успешного сохранения
+      clearOrderDraft();
       triggerToast("Заказ успешно сохранен");
     } catch(e) { triggerToast("Ошибка сохранения заказа", 'error'); }
   };
@@ -192,8 +257,8 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
                 <div className="bg-blue-50 text-blue-700 px-4 py-3 rounded-xl text-sm flex gap-2 items-start"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><div><span className="font-bold">Клиента нет в базе.</span><br/>Заполните Имя и Город, и он будет создан автоматически.</div></div>
             )}
             <div className="grid grid-cols-2 gap-4">
-               <Input label="Имя" icon={User} value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Имя клиента"/>
-               <Input label="Город" icon={MapPin} value={clientCity} onChange={e => setClientCity(e.target.value)} placeholder="Яготин"/>
+               <Input label="Имя" icon={User} value={clientName} onChange={e => updateDraft({ clientName: e.target.value })} placeholder="Имя клиента"/>
+               <Input label="Город" icon={MapPin} value={clientCity} onChange={e => updateDraft({ clientCity: e.target.value })} placeholder="Яготин"/>
             </div>
           </div>
         </div>
@@ -216,7 +281,7 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
                   <div key={m.id} onClick={() => { setSelModel(m.id); setSearch(m.sku); setShowModelList(false); }} className="p-3 px-4 cursor-pointer hover:bg-blue-50 border-b border-gray-50 last:border-0 flex justify-between items-center transition-colors">
                     <div><span className="font-bold text-gray-800">{m.sku}</span> <span className="text-gray-300 mx-2">|</span> <span className="text-gray-600">{m.color}</span></div>
                     <span className="font-bold text-green-600 bg-green-50 px-2 py-1 rounded text-sm">
-                        {convertPrice(m.price, mainCurrency, settings.exchangeRates)} {mainSymbol}
+                        {convertPrice(m.price, mainCurrency, settings.exchangeRates)} {mainCurrency}
                     </span>
                   </div>
                 ))}
@@ -229,7 +294,7 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
               <div className="font-bold text-xl text-blue-900 border-b border-blue-100 pb-3 mb-4 flex justify-between items-center">
                 <span>{currentM.sku} / {currentM.color}</span>
                 <span className="text-green-600 bg-green-50 px-3 py-1 rounded-lg">
-                    {convertPrice(currentM.price, mainCurrency, settings.exchangeRates)} {mainSymbol}
+                    {convertPrice(currentM.price, mainCurrency, settings.exchangeRates)} {mainCurrency}
                 </span>
               </div>
               
@@ -269,7 +334,11 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
 
       {/* Cart & Payment */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-[calc(100vh-100px)] sticky top-4">
-        <h3 className="font-bold border-b border-gray-100 pb-4 mb-4 flex gap-2 text-gray-800 items-center text-lg"><ShoppingCart className="text-blue-600"/> Корзина</h3>
+        <div className="flex justify-between items-center border-b border-gray-100 pb-4 mb-4">
+            <h3 className="font-bold flex gap-2 text-gray-800 items-center text-lg"><ShoppingCart className="text-blue-600"/> Корзина</h3>
+            {cart.length > 0 && <button onClick={clearOrderDraft} className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1 transition-colors"><Trash2 size={12}/> Очистить</button>}
+        </div>
+        
         <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar mb-4">
           {cart.map((i, idx) => (
             <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between group hover:border-blue-200 transition-colors hover:shadow-sm">
@@ -280,12 +349,13 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
                 </div>
               </div>
               <div className="text-right flex flex-col justify-between items-end">
-                {/* Отображаем цену в основной валюте */}
                 <div className="font-bold text-gray-800">
-                    {convertPrice(i.total, mainCurrency, settings.exchangeRates)} {mainSymbol}
+                    {convertPrice(i.total, mainCurrency, settings.exchangeRates)} {mainCurrency}
                 </div>
                 <div className="flex gap-2 mt-1">
-                   <button onClick={() => setConfirmDeleteIndex(idx)} className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded"><Trash2 size={16}/></button>
+                   {/* ВОЗВРАЩЕНА КНОПКА РЕДАКТИРОВАНИЯ */}
+                   <button onClick={() => openEditModal(idx)} className="text-blue-400 hover:text-blue-600 p-1 bg-blue-50 rounded transition-colors"><Edit size={16}/></button>
+                   <button onClick={() => setConfirmDeleteIndex(idx)} className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded transition-colors"><Trash2 size={16}/></button>
                 </div>
               </div>
             </div>
@@ -306,14 +376,14 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
                         placeholder="Сумма предоплаты" 
                         className="w-full border border-gray-200 rounded-lg py-2 px-3 focus:outline-none focus:border-green-500 transition-colors"
                         value={prepayment}
-                        onChange={e => setPrepayment(e.target.value)}
+                        onChange={e => updateDraft({ prepayment: e.target.value })}
                     />
                  </div>
                  {/* Выбор валюты оплаты */}
                  <select 
                     className="border border-gray-200 rounded-lg px-2 bg-white font-bold text-gray-700 focus:border-green-500 focus:outline-none"
                     value={paymentCurrency}
-                    onChange={e => setPaymentCurrency(e.target.value)}
+                    onChange={e => updateDraft({ paymentCurrency: e.target.value })}
                  >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -322,23 +392,55 @@ const NewOrderPage = ({ clients, setClients, models, sizeGrid, setOrders, orders
              </div>
              <div className="text-right text-xs text-green-700 font-medium">
                  Полная сумма заказа: <span className="font-bold text-base">{fullAmountInPaymentCurrency} {paymentCurrency}</span>
-                 <br/><span className="text-green-500/70">Курс: {paymentRate}</span>
+                 <br/>
+                 <span className="text-green-500/70 flex justify-end items-center gap-1">
+                     Курс: {paymentRate.toFixed(2)}
+                     {/* Кнопка редактирования курса */}
+                     <button onClick={() => goToSettingsAndHighlight('rates')} className="p-1 bg-green-100 rounded hover:bg-green-200 text-green-700 transition-colors" title="Изменить курс">
+                         <Edit size={10}/>
+                     </button>
+                 </span>
              </div>
           </div>
 
           <div className="flex justify-between font-bold text-xl text-gray-800">
             <span>Итого:</span>
-            {/* Итого показываем в ОСНОВНОЙ валюте, а не в валюте оплаты (для единообразия интерфейса) */}
             <span className="text-blue-600">
-                {convertPrice(totalCartUSD, mainCurrency, settings.exchangeRates)} {mainSymbol}
+                {convertPrice(totalCartUSD, mainCurrency, settings.exchangeRates)} {mainCurrency}
             </span>
           </div>
           <Button onClick={saveOrder} variant="success" className="w-full py-4 text-lg shadow-xl shadow-green-100 hover:shadow-green-200 transform hover:-translate-y-1 transition-all">Оформить заказ</Button>
         </div>
       </div>
       
+      {/* Модалка редактирования позиции */}
+      {editingCartIndex !== null && (
+        <Modal title="Редактирование позиции" onClose={() => setEditingCartIndex(null)} footer={<Button onClick={saveEditedItem}>Сохранить изменения</Button>}>
+            <div className="space-y-4">
+                 <div className="text-center font-bold text-lg mb-4 text-gray-700">{cart[editingCartIndex].sku} / {cart[editingCartIndex].color}</div>
+                 <div className="mb-4">
+                    <div className="flex justify-between items-center mb-2"><label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Размеры</label><button onClick={() => setSizeQuantities({})} className="text-gray-400 hover:text-red-500 text-xs flex items-center gap-1 transition-colors"><Eraser size={14}/>Очистить</button></div>
+                    <div className="flex flex-wrap gap-2">
+                        {/* Повторяем логику рендера размеров как в основном блоке, используем данные из settings */}
+                        {Array.from({ length: Math.max(0, parseInt(sizeGrid.max) - parseInt(sizeGrid.min) + 1) }, (_, i) => parseInt(sizeGrid.min) + i).map(size => (
+                            <div key={size} className="flex flex-col items-center">
+                                <span className="text-xs text-gray-500 font-medium mb-1">{size}</span>
+                                <input type="text" inputMode="numeric" className="w-11 h-11 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm text-lg font-bold text-gray-700 placeholder-gray-200" placeholder="0" value={sizeQuantities[size] > 0 ? sizeQuantities[size] : ''} onChange={e => handleSizeChange(size, e.target.value)} />
+                            </div>
+                        ))}
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-2">
+                    {[6, 8, 10, 12].map(boxSize => (
+                        <button key={boxSize} onClick={() => addBox(boxSize)} className="bg-white border border-blue-200 text-blue-700 py-2 rounded-lg text-xs font-bold hover:bg-blue-50 active:scale-95 transition-all shadow-sm flex justify-center items-center gap-1"><Box size={14}/> {boxSize}-ти парный +1</button>
+                    ))}
+                 </div>
+            </div>
+        </Modal>
+      )}
+
       {confirmDeleteIndex !== null && (
-          <Modal title="Удаление" onClose={() => setConfirmDeleteIndex(null)} footer={<><Button variant="secondary" onClick={() => setConfirmDeleteIndex(null)}>Отмена</Button><Button variant="danger" onClick={() => {setCart(cart.filter((_, x) => x !== confirmDeleteIndex)); setConfirmDeleteIndex(null);}}>Удалить</Button></>}>
+          <Modal title="Удаление" onClose={() => setConfirmDeleteIndex(null)} footer={<><Button variant="secondary" onClick={() => setConfirmDeleteIndex(null)}>Отмена</Button><Button variant="danger" onClick={() => deleteFromCart(confirmDeleteIndex)}>Удалить</Button></>}>
               <p className="text-center text-gray-600">Удалить этот товар из корзины?</p>
           </Modal>
       )}

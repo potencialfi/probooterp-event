@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Box, RefreshCw } from 'lucide-react';
 import { Input, Button } from '../components/UI';
 import { API_URL } from '../api';
 
-const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, setSettings }) => {
+const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, setSettings, highlightSetting, setHighlightSetting }) => {
   const [activeBoxTab, setActiveBoxTab] = useState('6');
   const [boxTemplates, setBoxTemplates] = useState(settings?.boxTemplates || { 6:{}, 8:{}, 10:{}, 12:{} });
   const [rates, setRates] = useState(settings?.exchangeRates || { usd: 0, eur: 0, isManual: false });
-  // Добавляем локальное состояние для основной валюты
   const [mainCurrency, setMainCurrency] = useState(settings?.mainCurrency || 'USD');
+
+  // Ref для блока курсов для подсветки
+  const ratesRef = useRef(null);
 
   useEffect(() => {
     if(settings?.boxTemplates) setBoxTemplates(settings.boxTemplates);
@@ -16,6 +18,18 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
     else fetchNBU(); 
     if(settings?.mainCurrency) setMainCurrency(settings.mainCurrency);
   }, [settings]);
+
+  // Эффект для подсветки при переходе с кнопки редактирования
+  useEffect(() => {
+      if (highlightSetting === 'rates' && ratesRef.current) {
+          ratesRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          ratesRef.current.classList.add('ring-2', 'ring-green-500', 'bg-green-50');
+          setTimeout(() => {
+              ratesRef.current.classList.remove('ring-2', 'ring-green-500', 'bg-green-50');
+              setHighlightSetting(null);
+          }, 2000);
+      }
+  }, [highlightSetting, setHighlightSetting]);
 
   const fetchNBU = async () => {
     try {
@@ -99,22 +113,21 @@ const SettingsPage = ({ sizeGrid, setSizeGrid, apiCall, triggerToast, settings, 
            <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Настройки</h2>
            
            <div className="flex gap-4">
-                {/* Выбор основной валюты */}
                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center gap-2 text-sm">
-                    <span className="font-bold text-gray-500">Валюта:</span>
+                    <span className="font-bold text-gray-500">Основная валюта:</span>
                     <select 
                         className="font-bold text-blue-600 bg-transparent outline-none cursor-pointer"
                         value={mainCurrency}
                         onChange={(e) => saveMainCurrency(e.target.value)}
                     >
-                        <option value="USD">USD ($)</option>
-                        <option value="EUR">EUR (€)</option>
-                        <option value="UAH">UAH (₴)</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="UAH">UAH</option>
                     </select>
                </div>
 
-               {/* Курсы валют */}
-               <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4 text-sm">
+               {/* Курсы валют с рефом для подсветки */}
+               <div ref={ratesRef} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4 text-sm transition-all duration-300">
                     <div className="flex items-center gap-2">
                         <span className="font-bold text-gray-500">USD:</span>
                         <input className="w-16 border rounded px-1 py-0.5 text-center font-bold" type="number" value={rates.usd} onChange={e=>handleRateChange('usd', e.target.value)}/>

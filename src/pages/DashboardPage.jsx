@@ -1,22 +1,46 @@
 import React, { useState, useMemo } from 'react';
 import { ShoppingBag, Footprints, Wallet, CreditCard, Eye, EyeOff, Plus, ArrowRight } from 'lucide-react';
+import { convertPrice } from '../utils';
 
-const DashboardPage = ({ orders = [], setActiveTab }) => {
+const DashboardPage = ({ orders = [], setActiveTab, settings }) => {
   const [showStats, setShowStats] = useState(false);
   
+  const mainCurrency = settings?.mainCurrency || 'USD';
+
   const stats = useMemo(() => {
-    if (!orders) return { totalOrders: 0, totalSum: 0, totalPairs: 0, prepayment: 0, avgCheck: 0 };
+    if (!orders) return { totalOrders: 0, totalSumUSD: 0, totalPairs: 0, prepayments: {} };
+    
     const totalOrders = orders.length;
-    const totalSum = orders.reduce((acc, o) => acc + (o.total || 0), 0);
+    
+    // Суммируем всё в USD (база), чтобы потом конвертировать в Main Currency
+    const totalSumUSD = orders.reduce((acc, o) => acc + (o.total || 0), 0);
     const totalPairs = orders.reduce((acc, o) => acc + (o.items || []).reduce((sum, i) => sum + (i.qty || 0), 0), 0);
-    const prepayment = totalSum * 0.3; // Пример расчета
-    const avgCheck = totalOrders > 0 ? totalSum / totalOrders : 0;
-    return { totalOrders, totalSum, totalPairs, prepayment, avgCheck };
+    
+    // Считаем предоплаты раздельно по валютам
+    const prepayments = { USD: 0, EUR: 0, UAH: 0 };
+    orders.forEach(o => {
+        if (o.payment) {
+            const curr = o.payment.originalCurrency || 'USD';
+            const amt = o.payment.originalAmount || 0;
+            if (prepayments[curr] !== undefined) prepayments[curr] += amt;
+            else prepayments[curr] = amt;
+        }
+    });
+
+    return { totalOrders, totalSumUSD, totalPairs, prepayments };
   }, [orders]);
+
+  // Общая сумма предоплат, пересчитанная в основную валюту
+  const totalPrepaymentInMain = useMemo(() => {
+      let total = 0;
+      // Мы можем взять сохраненный эквивалент USD из каждого заказа для точности
+      const totalUSD = orders.reduce((acc, o) => acc + (o.payment?.prepaymentInUSD || 0), 0);
+      return convertPrice(totalUSD, mainCurrency, settings.exchangeRates);
+  }, [orders, mainCurrency, settings]);
 
   const displayValue = (value, type = 'number') => {
     if (showStats) {
-      if (type === 'money') return `${Math.round(value).toLocaleString()} USD`;
+      if (type === 'money') return `${convertPrice(value, mainCurrency, settings.exchangeRates)} ${mainCurrency}`;
       return Math.round(value).toLocaleString();
     }
     if (type === 'money') return '💰💰💰';
@@ -61,12 +85,26 @@ const DashboardPage = ({ orders = [], setActiveTab }) => {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-green-200 transition-all relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity transform group-hover:scale-110"><Wallet size={64} className="text-green-600"/></div>
             <div className="flex items-center gap-3 mb-3 text-green-600 uppercase text-xs font-bold tracking-wider relative z-10"><Wallet size={16} /> Общая сумма</div>
-            <div className="text-3xl font-black text-gray-800 relative z-10">{displayValue(stats.totalSum, 'money')}</div>
+            <div className="text-3xl font-black text-gray-800 relative z-10">{displayValue(stats.totalSumUSD, 'money')}</div>
         </div>
+        {/* Карточка предоплаты с детализацией */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-blue-200 transition-all relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity transform group-hover:scale-110"><CreditCard size={64} className="text-blue-600"/></div>
             <div className="flex items-center gap-3 mb-3 text-blue-600 uppercase text-xs font-bold tracking-wider relative z-10"><CreditCard size={16} /> Предоплата</div>
-            <div className="text-3xl font-black text-gray-800 relative z-10">{displayValue(stats.prepayment, 'money')}</div>
+            <div className="relative z-10">
+                {showStats ? (
+                    <>
+                        <div className="text-xs text-gray-500 mb-1 space-y-0.5">
+                            {Object.entries(stats.prepayments).map(([curr, amt]) => (
+                                amt > 0 && <div key={curr} className="flex justify-between w-24 font-medium"><span>{curr}:</span> <span>{amt}</span></div>
+                            ))}
+                        </div>
+                        <div className="text-2xl font-black text-gray-800 border-t pt-1 mt-1">
+                            ≈ {totalPrepaymentInMain} {mainCurrency}
+                        </div>
+                    </>
+                ) : <div className="text-3xl font-black text-gray-800">💰💰💰</div>}
+            </div>
         </div>
       </div>
 
@@ -85,7 +123,9 @@ const DashboardPage = ({ orders = [], setActiveTab }) => {
                 <tr key={o.id} className="hover:bg-gray-50/80 transition-colors">
                   <td className="p-4 pl-6 font-mono text-gray-500">#{o.id.toString().slice(-6)}</td>
                   <td className="p-4 text-gray-800 font-medium">{new Date(o.date).toLocaleDateString()}</td>
-                  <td className="p-4 text-right font-bold text-green-600">{showStats ? `${o.total} USD` : '💰'}</td>
+                  <td className="p-4 text-right font-bold text-green-600">
+                      {showStats ? `${convertPrice(o.total, mainCurrency, settings.exchangeRates)} ${mainCurrency}` : '💰'}
+                  </td>
                   <td className="p-4 text-center">
                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md font-medium">Завершен</span>
                   </td>

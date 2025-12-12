@@ -1720,9 +1720,9 @@
       "max": "45"
     },
     "exchangeRates": {
-      "usd": 42.19,
+      "usd": 43.2,
       "eur": 49.47,
-      "isManual": false
+      "isManual": true
     },
     "mainCurrency": "USD"
   }

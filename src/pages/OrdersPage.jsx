@@ -51,20 +51,23 @@ const OrdersPage = ({ orders, clients }) => {
                       <td className="py-3"><span className="font-bold">{i.sku}</span><br/><span className="text-sm text-gray-500">{i.color}</span></td>
                       <td className="py-3 text-sm text-gray-600">{i.note}</td>
                       <td className="py-3 text-center font-medium">{i.qty}</td>
-                      <td className="py-3 text-right text-gray-600">${i.price}</td>
-                      <td className="py-3 text-right font-bold">${i.total}</td>
+                      <td className="py-3 text-right text-gray-600">{i.price} USD</td>
+                      <td className="py-3 text-right font-bold">{i.total} USD</td>
                   </tr>
               ))}
           </tbody>
           <tfoot>
               <tr className="border-t-2 border-gray-800">
                   <td colSpan="4" className="pt-4 text-right font-bold text-xl">ИТОГО:</td>
-                  <td className="pt-4 text-right font-bold text-xl">${order.total}</td>
+                  <td className="pt-4 text-right font-bold text-xl">{order.total} USD</td>
               </tr>
               {order.payment && (
                   <tr>
                       <td colSpan="4" className="pt-2 text-right text-sm text-gray-500 uppercase tracking-wide">Предоплата:</td>
-                      <td className="pt-2 text-right font-bold text-green-600">{order.payment.prepayment} {order.payment.currency}</td>
+                      {/* Показываем оригинальную валюту предоплаты */}
+                      <td className="pt-2 text-right font-bold text-green-600">
+                          {order.payment.originalAmount} {order.payment.originalCurrency}
+                      </td>
                   </tr>
               )}
           </tfoot>
@@ -80,14 +83,14 @@ const OrdersPage = ({ orders, clients }) => {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
         <table className="w-full text-left">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider"><tr><th className="p-4">#</th><th className="p-4">Дата</th><th className="p-4">Клиент</th><th className="p-4 text-right">Сумма</th><th className="p-4"></th></tr></thead>
+            <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider"><tr><th className="p-4">#</th><th className="p-4">Дата</th><th className="p-4">Клиент</th><th className="p-4 text-right">Сумма (USD)</th><th className="p-4"></th></tr></thead>
             <tbody className="divide-y divide-gray-100">
             {orders.map(o => (
                 <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                     <td className="p-4 font-mono text-gray-500 text-sm">#{o.id.toString().slice(-6)}</td>
                     <td className="p-4 text-gray-800">{new Date(o.date).toLocaleDateString()}</td>
                     <td className="p-4 text-gray-700 font-medium">{clients.find(c=>c.id===o.clientId)?.name || 'Удален'}</td>
-                    <td className="p-4 text-right font-bold text-green-600">${o.total}</td>
+                    <td className="p-4 text-right font-bold text-green-600">{o.total} USD</td>
                     <td className="p-4 text-center"><Button onClick={() => setViewId(o.id)} size="sm" variant="secondary" icon={FileText}>Открыть</Button></td>
                 </tr>
             ))}
