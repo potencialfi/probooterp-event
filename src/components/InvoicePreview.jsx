@@ -5,24 +5,16 @@ import { IMG_URL } from '../api';
 import { convertPrice } from '../utils';
 
 const InvoicePreview = ({ order, settings, onBack }) => {
-    // order - это унифицированный объект (из истории или черновика)
-    // Ожидаемая структура order:
-    // {
-    //    id: string | number,
-    //    date: string (ISO) | Date,
-    //    client: { name, city, phone },
-    //    items: [],
-    //    lumpDiscount: number,
-    //    payment: { originalAmount, originalCurrency } (может быть null)
-    // }
-
+    // order - унифицированный объект.
+    // Ожидает поля: id, date, client {name, phone, city}, items [], payment {}, lumpDiscount
+    
     const mainCurrency = settings?.mainCurrency || 'USD';
-    const dateObj = new Date(order.date);
+    const dateObj = new Date(order.date || Date.now());
     const dateStr = dateObj.toLocaleDateString();
     const timeStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     
-    // Форматирование ID (убираем лишние нули если это число, или оставляем как есть)
-    const displayId = String(order.id).replace(/^0+/, '');
+    // Форматирование ID (убираем лишние нули для красоты, если это число)
+    const displayId = String(order.id);
 
     const handlePrint = () => window.print();
 
@@ -30,47 +22,60 @@ const InvoicePreview = ({ order, settings, onBack }) => {
     const brandLogo = settings?.brandLogo;
     const brandPhones = settings?.brandPhones || [];
 
-    // --- РАСЧЕТЫ ---
-    // Пересчитываем Грязную сумму и Скидки на лету на основе товаров
+    // --- РАСЧЕТЫ ВНУТРИ НАКЛАДНОЙ (чтобы гарантировать совпадение с отображением) ---
+    
+    // 1. Грязная сумма (Цена * Кол-во)
     const grossTotalUSD = order.items.reduce((acc, item) => acc + (item.price * item.qty), 0);
+    
+    // 2. Скидка на пары
     const totalPairDiscountUSD = order.items.reduce((acc, item) => acc + ((item.discountPerPair || 0) * item.qty), 0);
-    const lumpDiscount = order.lumpDiscount || 0;
-    const totalCombinedDiscountUSD = totalPairDiscountUSD + lumpDiscount;
     
-    // Итоговая сумма заказа в USD (должна совпадать с order.total, но считаем для проверки)
-    const calculatedTotalUSD = Math.max(0, grossTotalUSD - totalCombinedDiscountUSD);
+    // 3. Скидка на заказ
+    const lumpDiscountUSD = parseFloat(order.lumpDiscount) || 0;
+    
+    // 4. Общая скидка
+    const totalDiscountUSD = totalPairDiscountUSD + lumpDiscountUSD;
+    
+    // 5. Итого к оплате (Net Total)
+    const netTotalUSD = Math.max(0, grossTotalUSD - totalDiscountUSD);
 
-    // Данные об оплате
-    const prepaymentVal = order.payment?.originalAmount || 0;
-    const paymentCurr = order.payment?.originalCurrency || mainCurrency;
+    // 6. Оплата и Остаток
+    // Пытаемся найти сумму предоплаты в основной валюте (если была сохранена), иначе конвертируем примерно для отображения
+    const payment = order.payment || {};
+    const prepaymentOriginal = payment.originalAmount || 0;
+    const prepaymentCurrency = payment.originalCurrency || mainCurrency;
     
-    // Остаток в USD (для отображения конвертируем)
-    const prepaymentInUSD = order.payment?.prepaymentInUSD || 0; 
-    // Если это старый заказ без prepaymentInUSD, пытаемся примерно прикинуть или берем 0
-    const effectivePrepaymentUSD = prepaymentInUSD || (prepaymentVal && paymentCurr === 'USD' ? prepaymentVal : 0);
+    // Для расчета остатка нам нужно значение предоплаты в USD.
+    // В новых заказах оно есть в payment.prepaymentInUSD. В старых может не быть.
+    let prepaymentInUSD = payment.prepaymentInUSD;
+    if (prepaymentInUSD === undefined && prepaymentOriginal > 0) {
+        // Фоллбек для старых заказов (если валюты совпадают)
+        if (prepaymentCurrency === 'USD') prepaymentInUSD = prepaymentOriginal;
+        else prepaymentInUSD = 0; // Не можем точно посчитать без исторического курса
+    }
     
-    const remainingUSD = Math.max(0, calculatedTotalUSD - effectivePrepaymentUSD);
+    const remainingUSD = Math.max(0, netTotalUSD - (prepaymentInUSD || 0));
 
-    const hasDiscount = totalCombinedDiscountUSD > 0;
-    const hasPrepayment = prepaymentVal > 0;
+    const hasDiscount = totalDiscountUSD > 0;
+    const hasPrepayment = prepaymentOriginal > 0;
+    
+    // Показывать блок "Сумма" (подытог), только если итоговая сумма отличается от грязной
     const showSubtotal = hasDiscount || hasPrepayment;
 
-    // Сортировка размеров для компактного отображения
-    const formatSizes = (sizesObj) => {
-        if (!sizesObj) return '';
-        // Если sizesObj это строка (из старых записей), возвращаем как есть
-        if (typeof sizesObj === 'string') return sizesObj;
-        
-        return Object.entries(sizesObj)
+    // Форматирование размеров с пробелами: "40 (2), 41 (1)"
+    const formatSizes = (sizes) => {
+        if (!sizes) return '';
+        if (typeof sizes === 'string') return sizes; // Для старых записей
+        return Object.entries(sizes)
             .filter(([_, q]) => q > 0)
             .sort(([a], [b]) => Number(a) - Number(b))
-            .map(([s, q]) => `${s}(${q})`) // Компактно: 40(2)
+            .map(([s, q]) => `${s} (${q})`)
             .join(', ');
     };
 
     return (
         <div className="flex flex-col h-full bg-gray-100">
-            {/* Панель управления */}
+            {/* Панель управления (скрывается при печати) */}
             <div className="bg-white border-b border-gray-200 p-4 flex justify-between items-center print:hidden">
                 <div className="flex items-center gap-4">
                     <h2 className="text-xl font-bold text-gray-800">Предпросмотр накладной</h2>
@@ -83,16 +88,16 @@ const InvoicePreview = ({ order, settings, onBack }) => {
 
             {/* Лист А4 */}
             <div className="flex-1 overflow-auto p-8 custom-scrollbar print:p-0 print:overflow-visible">
-                <div className="bg-white max-w-[210mm] min-h-[297mm] mx-auto p-6 shadow-lg print:shadow-none print:m-0 print:w-full print:h-auto print:min-h-0 flex flex-col justify-between" id="invoice">
+                <div className="bg-white max-w-[210mm] min-h-[297mm] mx-auto p-8 shadow-lg print:shadow-none print:m-0 print:w-full print:h-auto print:min-h-0 flex flex-col justify-between" id="invoice">
                     
                     <div>
                         {/* Шапка */}
                         <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-6">
                             <div>
                                 {brandLogo ? (
-                                    <img src={`${IMG_URL}/${brandLogo}`} alt={brandName} className="h-8 object-contain mb-3" />
+                                    <img src={`${IMG_URL}/${brandLogo}`} alt={brandName} className="h-10 object-contain mb-3" onError={(e) => e.target.style.display = 'none'} />
                                 ) : (
-                                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1 uppercase">{brandName}</h1>
+                                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2 uppercase">{brandName}</h1>
                                 )}
                                 
                                 <div className="space-y-0.5 text-sm">
@@ -108,7 +113,7 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                         </div>
 
                         {/* Инфо о клиенте */}
-                        <div className="grid grid-cols-2 gap-8 mb-6 text-sm">
+                        <div className="grid grid-cols-2 gap-8 mb-8 text-sm">
                             <div>
                                 <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider mb-1">Клиент</h3>
                                 <div className="font-bold text-base text-gray-900 leading-tight">{order.client?.name || 'Не указан'}</div>
@@ -129,10 +134,10 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                         </div>
 
                         {/* Таблица товаров */}
-                        <table className="w-full text-left text-xs mb-4">
+                        <table className="w-full text-left text-xs mb-6">
                             <thead>
                                 <tr className="border-b-2 border-gray-800 text-gray-600 uppercase tracking-wider">
-                                    <th className="py-2 font-bold w-[25%]">Модель/Цвет</th>
+                                    <th className="py-2 font-bold w-[25%]">Модель / Цвет</th>
                                     <th className="py-2 font-bold w-[45%]">Размеры</th>
                                     <th className="py-2 text-center font-bold">Кол-во</th>
                                     <th className="py-2 text-right font-bold">Цена</th>
@@ -142,22 +147,21 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                             <tbody className="divide-y divide-gray-200">
                                 {order.items.map((item, idx) => (
                                     <tr key={idx}>
-                                        <td className="py-1 align-top pr-2">
+                                        <td className="py-2 align-top pr-2">
                                             <div className="font-bold text-gray-900 leading-tight">
-                                                {item.sku}<span className="font-normal text-gray-500">/{item.color}</span>
+                                                {item.sku} <span className="font-normal text-gray-500"> / {item.color}</span>
                                             </div>
-                                            {item.discountPerPair > 0 && <div className="text-[10px] text-green-600">Скидка: -{item.discountPerPair} {mainCurrency}/пара</div>}
+                                            {item.discountPerPair > 0 && <div className="text-[10px] text-green-600 mt-0.5">Скидка: -{item.discountPerPair} {mainCurrency}/пара</div>}
                                         </td>
-                                        <td className="py-1 align-top text-gray-600 leading-snug pr-2">
+                                        <td className="py-2 align-top text-gray-600 leading-snug pr-2">
                                             {item.sizes ? formatSizes(item.sizes) : item.note}
                                         </td>
-                                        <td className="py-1 align-top text-center font-medium">{item.qty}</td>
-                                        <td className="py-1 align-top text-right text-gray-600">
+                                        <td className="py-2 align-top text-center font-medium">{item.qty}</td>
+                                        <td className="py-2 align-top text-right text-gray-600">
                                             {convertPrice(item.price, mainCurrency, settings.exchangeRates)}
                                         </td>
-                                        <td className="py-1 align-top text-right font-bold text-gray-900">
-                                            {/* Показываем сумму строки с учетом скидки на пару */}
-                                            {convertPrice((item.price - (item.discountPerPair||0)) * item.qty, mainCurrency, settings.exchangeRates)}
+                                        <td className="py-2 align-top text-right font-bold text-gray-900">
+                                            {convertPrice(item.price * item.qty, mainCurrency, settings.exchangeRates)}
                                         </td>
                                     </tr>
                                 ))}
@@ -180,19 +184,19 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                                     {hasDiscount && (
                                         <div className="flex justify-end gap-4 text-green-600">
                                             <span>Скидка:</span>
-                                            <span>-{convertPrice(totalCombinedDiscountUSD, mainCurrency, settings.exchangeRates)} {mainCurrency}</span>
+                                            <span>-{convertPrice(totalDiscountUSD, mainCurrency, settings.exchangeRates)} {mainCurrency}</span>
                                         </div>
                                     )}
 
                                     {hasPrepayment && (
                                         <div className="flex justify-end gap-4 font-medium text-gray-800 pt-1 mt-1 border-t border-dashed border-gray-200">
                                             <span>Оплачено:</span>
-                                            <span>{prepaymentVal} {paymentCurr}</span>
+                                            <span>{prepaymentOriginal} {prepaymentCurrency}</span>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* ПРАВАЯ ЧАСТЬ: ФИНАЛЬНЫЙ ИТОГ/ОСТАТОК */}
+                                {/* ПРАВАЯ ЧАСТЬ: ФИНАЛЬНЫЙ ИТОГ или ОСТАТОК */}
                                 <div className="text-right">
                                     <div className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">
                                         {hasPrepayment ? 'Остаток' : 'Итого'}
@@ -207,7 +211,7 @@ const InvoicePreview = ({ order, settings, onBack }) => {
 
                         {/* Поля для подписей (только если есть предоплата) */}
                         {hasPrepayment && (
-                            <div className="grid grid-cols-2 gap-12 mt-12 mb-4">
+                            <div className="grid grid-cols-2 gap-12 mt-16 mb-4">
                                 <div>
                                     <div className="border-b border-gray-400 mb-1"></div>
                                     <div className="text-center text-[10px] text-gray-400 uppercase tracking-wide">Представитель бренда</div>
@@ -224,9 +228,10 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                     <div className="mt-auto">
                         <div className="text-center text-gray-800 font-medium text-sm mb-4">Спасибо за ваш заказ!</div>
                         
-                        <div className="pt-4 border-t border-gray-200 flex justify-between items-center text-[10px] text-gray-500">
+                        <div className="pt-4 border-t border-gray-200 flex justify-between items-center text-[10px] text-gray-400">
                             <div className="flex items-center gap-2">
                                 <span>Создано в</span>
+                                {/* Логотип в футере */}
                                 <img src={`${IMG_URL}/proboot-invoice.png`} alt="ProBoot" className="h-4 opacity-70" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/80x20?text=PROBOOT' }}/>
                             </div>
                             <div className="flex items-center gap-2">

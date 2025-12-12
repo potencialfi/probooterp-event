@@ -3,7 +3,7 @@ import { Search, Plus, ShoppingCart, User, Phone, MapPin, AlertTriangle, Box, Er
 import { apiCall } from '../api';
 import { normalizePhone, formatPhoneNumber, getNoun, convertPrice, convertToUSD } from '../utils';
 import { Button, Input, Modal } from '../components/UI';
-import InvoicePreview from '../components/InvoicePreview'; // Импорт нового компонента
+import InvoicePreview from '../components/InvoicePreview';
 
 // --- Компонент модального окна скидок ---
 const DiscountModal = ({ isOpen, onClose, onApply, cart, mainCurrency }) => {
@@ -129,7 +129,15 @@ const NewOrderPage = ({
       return acc + (priceWithDiscount * i.qty);
   }, 0);
 
-  const totalCartUSD = Math.max(0, subTotalUSD - (parseFloat(lumpDiscount) || 0));
+  // Скидка на весь заказ вычитается в конце (в USD)
+  // lumpDiscount в черновике хранится в той валюте, в которой его ввели? 
+  // Предположим, мы вводим в основной валюте, значит нужно конвертировать в USD для расчетов?
+  // Для простоты, пока считаем что lumpDiscount вводится в USD (так как база в USD).
+  // Если нужно вводить в UAH/EUR, надо конвертировать. 
+  // ДОРАБОТКА: Считаем lumpDiscount введенным в mainCurrency и конвертируем в USD для хранения
+  const lumpDiscountUSD = convertToUSD(parseFloat(lumpDiscount) || 0, mainCurrency, settings?.exchangeRates);
+
+  const totalCartUSD = Math.max(0, subTotalUSD - lumpDiscountUSD);
   const totalPairsInCart = cart.reduce((acc, i) => acc + i.qty, 0);
 
   const getPaymentRate = (targetCurr, rates) => {
@@ -151,26 +159,31 @@ const NewOrderPage = ({
 
   // --- HANDLERS ---
   const updateDraft = (fields) => { setOrderDraft(prev => ({ ...prev, ...fields })); };
+  
   const applyDiscount = (result) => {
       if (result.type === 'lump') {
           updateDraft({ lumpDiscount: result.value });
       } else if (result.type === 'pair') {
+          // Важно: скидка на пару вводится в mainCurrency, конвертируем в USD для хранения в item
+          const discountInUSD = convertToUSD(result.value || 0, mainCurrency, settings?.exchangeRates);
           const newCart = cart.map((item, idx) => {
               if (result.indices.includes(idx)) {
-                  const discount = result.value || 0;
-                  return { ...item, discountPerPair: discount, total: (item.price - discount) * item.qty };
+                  return { ...item, discountPerPair: discountInUSD, total: (item.price - discountInUSD) * item.qty };
               }
               return item;
           });
           updateDraft({ cart: newCart });
       }
   };
+
   const handlePhoneChange = (e) => {
     const raw = e.target.value;
     const formatted = formatPhoneNumber(raw);
     updateDraft({ clientPhone: formatted });
     setShowClientList(true);
   };
+  
+  // ... (useEffects и handlers для клиента, добавления товара, редактирования - без изменений, см. ниже полный код)
   useEffect(() => {
     const cleanInput = normalizePhone(clientPhone);
     if (!cleanInput) { updateDraft({ selectedClient: null }); return; }
@@ -210,7 +223,10 @@ const NewOrderPage = ({
     if (!currentM) return;
     const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
     if (totalQty === 0) { triggerToast("Укажите количество", 'error'); return; }
-    const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s}(${q})`);
+    
+    // Форматирование: добавляем пробел перед скобкой
+    const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s} (${q})`);
+    
     const note = noteParts.join(', ');
     updateDraft({ cart: [...cart, { ...currentM, modelId: currentM.id, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: 0, total: currentM.price * totalQty }] });
     setSizeQuantities({}); setSelModel(''); setSearch(''); setShowModelList(false);
@@ -219,17 +235,23 @@ const NewOrderPage = ({
       setEditingCartIndex(index);
       const itemToEdit = cart[index];
       if (itemToEdit.sizes) { setSizeQuantities({ ...itemToEdit.sizes }); } else { setSizeQuantities({}); }
-      setEditingDiscount(itemToEdit.discountPerPair || '');
+      // Конвертируем сохраненную скидку (USD) обратно в mainCurrency для редактирования
+      const discountInMain = convertPrice(itemToEdit.discountPerPair || 0, mainCurrency, settings.exchangeRates);
+      setEditingDiscount(discountInMain === '0.00' ? '' : discountInMain);
   };
   const saveEditedItem = () => {
       if (editingCartIndex === null) return;
       const item = cart[editingCartIndex];
       const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
       if (totalQty === 0) { triggerToast("Количество не может быть 0", "error"); return; }
-      const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s}(${q})`);
+      
+      const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s} (${q})`);
       const note = noteParts.join(', ');
-      const discount = parseFloat(editingDiscount) || 0;
-      const updatedItem = { ...item, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: discount, total: (item.price - discount) * totalQty };
+      
+      // Конвертируем введенную скидку в USD
+      const discountUSD = convertToUSD(parseFloat(editingDiscount) || 0, mainCurrency, settings.exchangeRates);
+
+      const updatedItem = { ...item, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: discountUSD, total: (item.price - discountUSD) * totalQty };
       const newCart = [...cart];
       newCart[editingCartIndex] = updatedItem;
       updateDraft({ cart: newCart });
@@ -255,7 +277,7 @@ const NewOrderPage = ({
         } catch (e) { triggerToast(`Ошибка клиента: ${e.message}`, 'error'); return; }
     }
     const order = { 
-        date: new Date().toISOString(), clientId: parseInt(finalClientId), items: cart, total: totalCartUSD, lumpDiscount: lumpDiscount,
+        date: new Date().toISOString(), clientId: parseInt(finalClientId), items: cart, total: totalCartUSD, lumpDiscount: lumpDiscountUSD,
         payment: { originalAmount: Number(prepayment), originalCurrency: paymentCurrency, rateAtMoment: paymentRate, prepaymentInUSD: prepaymentInUSD }
     };
     try {
@@ -267,41 +289,24 @@ const NewOrderPage = ({
     } catch(e) { triggerToast("Ошибка сохранения заказа", 'error'); }
   };
 
-  const filteredM = models.filter(m => m.sku.toLowerCase().includes(search.toLowerCase()) || m.color.toLowerCase().includes(search.toLowerCase()));
-  const filteredClients = useMemo(() => {
-     if (clientPhone.length < 2) return [];
-     const search = normalizePhone(clientPhone);
-     return clients.filter(c => {
-        const dbPhone = normalizePhone(c.phone);
-        if (selectedClient && c.id === selectedClient.id) return false;
-        if (dbPhone.includes(search)) return true;
-        if (search.startsWith('0') && dbPhone.includes('38' + search)) return true;
-        return false;
-     });
-  }, [clients, clientPhone, selectedClient]);
-  const minSize = parseInt(sizeGrid?.min);
-  const maxSize = parseInt(sizeGrid?.max);
-  const rangeLength = Math.max(0, maxSize - minSize + 1);
-  const sizeRange = (isNaN(minSize) || isNaN(maxSize)) ? [] : Array.from({ length: rangeLength }, (_, i) => minSize + i);
   const currentTotalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
-  const currentTotalSumUSD = currentM ? currentM.price * currentTotalQty : 0;
 
   // --- RENDER ---
   if (showInvoice) {
-      // Подготавливаем объект order для превью, добавляя клиентские данные
+      // Собираем объект для превью, похожий на сохраненный
       const orderForPreview = {
-          ...orderDraft,
-          id: orders.length + 1, // Показываем будущий ID
+          id: orders.length + 1, 
+          date: new Date(),
           client: { name: clientName, city: clientCity, phone: clientPhone },
           items: cart,
-          payment: { originalAmount: prepayment, originalCurrency: paymentCurrency, prepaymentInUSD }
+          lumpDiscount: lumpDiscountUSD,
+          payment: { originalAmount: prepayment, originalCurrency: paymentCurrency, prepaymentInUSD: prepaymentInUSD }
       };
 
       return <InvoicePreview 
           order={orderForPreview}
           settings={settings} 
           onBack={() => setShowInvoice(false)}
-          nextOrderId={orders.length + 1}
       />;
   }
 
@@ -407,11 +412,6 @@ const NewOrderPage = ({
                     <div className="text-sm font-bold text-blue-900">
                         Итого: {currentTotalQty} {getNoun(currentTotalQty, 'пара', 'пары', 'пар')}
                     </div>
-                    {currentTotalQty > 0 && (
-                        <div className="text-sm font-bold text-green-600">
-                            ({convertPrice(currentTotalSumUSD, mainCurrency, settings.exchangeRates)} {mainCurrency})
-                        </div>
-                    )}
                 </div>
                 <Button onClick={addToCart} size="md" icon={Plus} className="h-[46px] px-8">В заказ</Button>
               </div>

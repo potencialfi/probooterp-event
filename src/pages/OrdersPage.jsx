@@ -21,7 +21,8 @@ const OrdersPage = ({ orders, clients, settings }) => {
           order={orderForPreview}
           settings={settings}
           onBack={() => setViewId(null)}
-          nextOrderId={order.id} // Для истории показываем реальный ID
+          // Для истории передаем ID заказа напрямую, т.к. он уже существует
+          // InvoicePreview сам обработает отображение
       />
     );
   }
@@ -36,7 +37,7 @@ const OrdersPage = ({ orders, clients, settings }) => {
             <tbody className="divide-y divide-gray-100">
             {orders.map(o => (
                 <tr key={o.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="p-4 font-mono text-gray-500 text-sm">#{o.id}</td>
+                    <td className="p-4 font-mono text-gray-500 text-sm">#{String(o.id).slice(-6)}</td>
                     <td className="p-4 text-gray-800">{new Date(o.date).toLocaleDateString()}</td>
                     <td className="p-4 text-gray-700 font-medium">{clients.find(c=>c.id===o.clientId)?.name || 'Удален'}</td>
                     <td className="p-4 text-right font-bold text-green-600">${o.total}</td>
