@@ -2,53 +2,119 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Гарантируем, что приложение занимает всю высоту */
 html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Важно: убираем двойные скроллы */
+  overflow: hidden;
+  font-size: 16px; /* Стандартный размер */
+  background-color: #f8fafc;
 }
 
-/* Убираем стрелочки в input type="number" */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+
+@layer components {
+  /* --- КОНТЕЙНЕРЫ --- */
+  .page-container {
+    @apply h-full flex flex-col p-6 gap-6 overflow-hidden bg-slate-50 animate-fade-in;
+  }
+
+  .ui-card {
+    @apply bg-white p-5 rounded-2xl shadow-sm border border-gray-200;
+  }
+
+  /* --- ТИПОГРАФИКА --- */
+  .page-title {
+    @apply text-3xl font-bold text-gray-800 tracking-tight;
+  }
+  
+  .page-subtitle {
+    @apply text-sm text-gray-500 font-medium mt-1;
+  }
+
+  .section-title {
+    @apply text-base font-bold text-gray-800 flex items-center gap-2 mb-4 pb-2 border-b border-gray-100 uppercase tracking-wide;
+  }
+
+  .ui-label {
+    @apply block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1;
+  }
+
+  /* --- ИНПУТЫ (h-11 = 44px) --- */
+  .ui-input {
+    @apply w-full bg-white border border-gray-300 text-gray-900 text-sm font-medium 
+           rounded-xl px-4 outline-none transition-all h-11
+           focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 
+           placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-400;
+  }
+
+  /* --- КНОПКИ (h-11 = 44px) --- */
+  .btn-base {
+    @apply inline-flex items-center justify-center gap-2 font-bold transition-all 
+           active:scale-95 disabled:opacity-60 disabled:pointer-events-none rounded-xl h-11 text-sm shadow-sm;
+  }
+  
+  /* Размеры */
+  .btn-sm { @apply h-9 px-3 text-base; }
+  .btn-md { @apply h-11 px-5; }
+  .btn-lg { @apply h-12 px-6 text-base; }
+  
+  /* ЦВЕТА */
+  .btn-primary { 
+    @apply bg-blue-600 text-white border border-blue-600 hover:bg-blue-700 shadow-blue-100; 
+  }
+  .btn-success { 
+    @apply bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 shadow-emerald-100; 
+  }
+  .btn-danger { 
+    @apply bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 shadow-red-50; 
+  }
+  .btn-secondary { 
+    @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50; 
+  }
+
+  /* --- ТАБЛИЦЫ --- */
+  .ui-table-wrapper {
+    @apply ui-card p-0 overflow-hidden flex flex-col;
+  }
+
+  .ui-table {
+    @apply w-full text-left border-collapse text-sm;
+  }
+
+  .ui-th {
+    @apply px-5 py-3 bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider font-bold border-b border-gray-200 sticky top-0 z-10;
+  }
+
+  .ui-td {
+    @apply px-5 py-3 border-b border-gray-100 text-gray-800 font-medium;
+  }
+
+  .ui-tr {
+    @apply hover:bg-blue-50/30 transition-colors cursor-default;
+  }
+  
+  .ui-tr:last-child .ui-td { border-bottom: none; }
+
+  .ui-actions {
+    @apply flex justify-end gap-2 opacity-0 transition-opacity;
+  }
+  .ui-tr:hover .ui-actions { opacity: 1; }
+
+  /* --- МОДАЛКИ --- */
+  .modal-overlay {
+    @apply fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md animate-fade-in;
+  }
+
+  .modal-content {
+    @apply bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-slide-up ring-1 ring-gray-200;
+  }
 }
 
-/* Кастомный скроллбар для всего приложения */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* slate-300 */
-  border-radius: 20px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8; /* slate-400 */
-}
-
-/* Анимации */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
-}
-
-/* Настройки печати */
-@media print {
-  @page { margin: 0; size: A4; }
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  aside, .no-print { display: none !important; }
-  #root, main { height: auto; overflow: visible; }
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+.animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }

@@ -1,36 +1,45 @@
 import React, { useState } from 'react';
+import { LogIn } from 'lucide-react';
+import { Input, Button } from '../components/UI';
 import { apiCall } from '../api';
-import { Button, Input } from '../components/UI';
 
 const LoginPage = ({ onLogin }) => {
-  const [login, setLogin] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true); setError('');
     try {
-      const res = await apiCall('/login', 'POST', { login, password });
-      if (res.success) {
-        onLogin(res.user);
-      } else {
-        setError(res.message);
-      }
-    } catch (err) {
-      setError(err.message || 'Ошибка подключения');
-    }
+      const user = await apiCall('/login', 'POST', { phone, password });
+      onLogin(user);
+    } catch (err) { setError(err.message || 'Ошибка входа'); } 
+    finally { setLoading(false); }
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-50">
-      <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-sm">
-        <h1 className="text-2xl font-bold mb-8 text-center text-gray-800">Вход</h1>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Input label="Логин" value={login} onChange={e => setLogin(e.target.value)} />
-          <Input label="Пароль" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-          {error && <div className="text-red-500 text-sm text-center font-medium">{error}</div>}
-          <Button className="w-full" onClick={handleSubmit}>Войти</Button>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 animate-fade-in">
+      <div className="ui-card w-full max-w-md border-t-4 border-t-blue-600 shadow-xl">
+        <div className="text-center mb-8">
+          <div className="bg-blue-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-blue-600">
+            <LogIn size={32} />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800">Вход в систему</h1>
+          <p className="text-gray-500 text-sm mt-1">Введите данные для доступа к ShoeExpo</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center font-medium border border-red-100">{error}</div>}
+          <Input label="Телефон" value={phone} onChange={e => setPhone(e.target.value)} placeholder="login" autoFocus />
+          <Input label="Пароль" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" />
+          <Button type="submit" className="w-full h-12 text-base" disabled={loading}>{loading ? 'Вход...' : 'Войти'}</Button>
         </form>
+        
+        <div className="text-center mt-6 text-xs text-gray-400">
+          ShoeExpo Pro v1.0
+        </div>
       </div>
     </div>
   );

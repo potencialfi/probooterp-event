@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Download, Upload } from 'lucide-react';
-import { Button, Input, Modal, Select, Pagination } from '../components/UI';
+import { Button, Input, Modal, Select, Pagination, PageHeader } from '../components/UI';
 import { apiCall } from '../api';
 import { convertPrice, handleExportExcel, convertToUSD } from '../utils';
 
 const initialModel = { sku: '', color: '', price: '', gridId: '' };
-const ITEMS_PER_PAGE = 20; // Вернули 20 элементов, так как они стали компактнее
+const ITEMS_PER_PAGE = 20;
 
-const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAllData, setImportResult, settings }) => {
+const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAllData, settings }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingModel, setEditingModel] = useState(initialModel);
   const [newModel, setNewModel] = useState(initialModel);
@@ -22,168 +22,86 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
   useEffect(() => { setCurrentPage(1); }, [search]);
 
   const handleAddModel = async () => {
-    if (!newModel.sku || !newModel.color || !newModel.price) {
-      triggerToast("Заполните артикул, цвет и цену", 'error');
-      return;
-    }
+    if (!newModel.sku || !newModel.color || !newModel.price) { triggerToast("Заполните поля", 'error'); return; }
     const gridIdToSave = newModel.gridId ? parseInt(newModel.gridId) : defaultGridId;
-    if (!gridIdToSave) { triggerToast("Не выбрана размерная сетка", 'error'); return; }
-
+    if (!gridIdToSave) { triggerToast("Нет сетки", 'error'); return; }
     const priceUSD = convertToUSD(parseFloat(newModel.price) || 0, mainCurrency, settings.exchangeRates);
-    const modelData = { ...newModel, price: priceUSD, gridId: gridIdToSave };
-
     try {
-        const created = await apiCall('/models', 'POST', modelData);
-        setModels([created, ...models]);
-        triggerToast("Модель добавлена");
-        setNewModel({ ...initialModel, gridId: gridIdToSave }); 
-    } catch(e) { triggerToast(e.message || "Ошибка создания", 'error'); }
+        const created = await apiCall('/models', 'POST', { ...newModel, price: priceUSD, gridId: gridIdToSave });
+        setModels([created, ...models]); triggerToast("Добавлено"); setNewModel({ ...initialModel, gridId: gridIdToSave }); 
+    } catch(e) { triggerToast(e.message, 'error'); }
   };
-
-  const openEditModal = (model) => {
-      const priceForInput = model.price ? convertPrice(model.price, mainCurrency, settings.exchangeRates) : '';
-      setEditingModel({ ...model, price: priceForInput, gridId: model.gridId || defaultGridId });
-      setIsEditModalOpen(true);
-  };
-
   const handleSaveEdit = async () => {
-      if (!editingModel.sku || !editingModel.color || !editingModel.price || !editingModel.gridId) {
-        triggerToast("Заполните все поля", 'error');
-        return;
-      }
       const priceUSD = convertToUSD(parseFloat(editingModel.price) || 0, mainCurrency, settings.exchangeRates);
-      const modelData = { ...editingModel, price: priceUSD, gridId: parseInt(editingModel.gridId) };
       try {
-          const updated = await apiCall(`/models/${editingModel.id}`, 'PUT', modelData);
-          setModels(models.map(m => m.id === updated.id ? updated : m));
-          triggerToast("Модель обновлена");
-          setIsEditModalOpen(false);
-          setEditingModel(initialModel);
-      } catch(e) { triggerToast(e.message || "Ошибка сохранения", 'error'); }
+          const updated = await apiCall(`/models/${editingModel.id}`, 'PUT', { ...editingModel, price: priceUSD, gridId: parseInt(editingModel.gridId) });
+          setModels(models.map(m => m.id === updated.id ? updated : m)); triggerToast("Сохранено"); setIsEditModalOpen(false);
+      } catch(e) { triggerToast(e.message, 'error'); }
   };
-
   const handleDeleteModel = async () => {
-      try {
-          await apiCall(`/models/${confirmDeleteId}`, 'DELETE');
-          setModels(models.filter(m => m.id !== confirmDeleteId));
-          setConfirmDeleteId(null);
-          triggerToast("Модель удалена");
-      } catch (e) { triggerToast("Ошибка удаления", 'error'); }
+      try { await apiCall(`/models/${confirmDeleteId}`, 'DELETE'); setModels(models.filter(m => m.id !== confirmDeleteId)); setConfirmDeleteId(null); triggerToast("Удалено"); } catch (e) { triggerToast("Ошибка", 'error'); }
   };
+  const handleExport = () => { handleExportExcel(filteredModels.map(m => ({ Артикул: m.sku, Цвет: m.color, Цена: m.price, Сетка: getGridLabel(m.gridId) })), 'models'); };
   
-  const filteredModels = useMemo(() => {
-    const s = search.toLowerCase();
-    return models.filter(m => 
-      m.sku.toLowerCase().includes(s) || 
-      m.color.toLowerCase().includes(s) ||
-      (sizeGrids.find(g => g.id === m.gridId)?.name || '').toLowerCase().includes(s)
-    );
-  }, [models, search, sizeGrids]);
-  
+  const filteredModels = useMemo(() => { const s = search.toLowerCase(); return models.filter(m => m.sku.toLowerCase().includes(s) || m.color.toLowerCase().includes(s)); }, [models, search]);
   const totalPages = Math.ceil(filteredModels.length / ITEMS_PER_PAGE);
   const paginatedModels = filteredModels.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const handleExport = () => {
-      const data = filteredModels.map(m => ({
-          Артикул: m.sku, Цвет: m.color, Цена_USD: m.price,
-          'Сетка ID': m.gridId, 'Название сетки': sizeGrids.find(g => g.id === m.gridId)?.name || 'Неизвестно'
-      }));
-      handleExportExcel(data, 'models_export');
-  };
-
-  const getGridLabel = (id) => {
-      const grid = sizeGrids.find(g => g.id === id);
-      return grid ? `${grid.name} (${grid.min}-${grid.max})` : 'Неизвестно';
-  };
+  const openEditModal = (m) => { setEditingModel({...m, price: m.price ? convertPrice(m.price, mainCurrency, settings.exchangeRates) : '', gridId: m.gridId || defaultGridId}); setIsEditModalOpen(true); };
+  const getGridLabel = (id) => { const g = sizeGrids.find(x => x.id === id); return g ? `${g.name} (${g.min}-${g.max})` : '-'; };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Модели обуви</h2>
-            <p className="text-sm text-gray-500 mt-1">Всего моделей: {models.length}</p>
-          </div>
-          <div className="flex gap-3">
-              <Button onClick={() => handleExport()} variant="secondary" icon={Download}>Экспорт</Button>
-              <label htmlFor="import-models">
-                  <input type="file" id="import-models" accept=".xlsx" onChange={(e) => handleFileImport(e, '/models/import', loadAllData)} className="hidden" />
-                  <Button variant="secondary" icon={Upload} as="span" className="cursor-pointer">Импорт</Button>
-              </label>
-          </div>
-      </div>
+    <div className="page-container">
+      <PageHeader title="Модели обуви" subtitle={`Всего позиций: ${models.length}`}>
+          <Button onClick={handleExport} variant="secondary" icon={Download}>Экспорт</Button>
+          <label className="cursor-pointer"><input type="file" accept=".xlsx" onChange={(e) => handleFileImport(e, '/models/import', loadAllData)} className="hidden" /><Button variant="secondary" icon={Upload} as="span">Импорт</Button></label>
+      </PageHeader>
 
-      {/* ADD & SEARCH */}
-      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-5">
+      <div className="ui-card space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
               <div className="md:col-span-3"><Input label="Артикул" value={newModel.sku} onChange={e => setNewModel({...newModel, sku: e.target.value})} placeholder="Арт..." /></div>
               <div className="md:col-span-3"><Input label="Цвет" value={newModel.color} onChange={e => setNewModel({...newModel, color: e.target.value})} placeholder="Цвет..." /></div>
               <div className="md:col-span-2"><Input label={`Цена (${mainCurrency})`} type="number" value={newModel.price} onChange={e => setNewModel({...newModel, price: e.target.value})} placeholder="0.00" /></div>
-              <div className="md:col-span-2">
-                  <Select label="Сетка" value={newModel.gridId || defaultGridId} onChange={e => setNewModel({...newModel, gridId: parseInt(e.target.value)})}>
-                      {sizeGrids.map(g => (<option key={g.id} value={g.id}>{g.name} ({g.min}-{g.max})</option>))}
-                  </Select>
-              </div>
-              <div className="md:col-span-2"><Button onClick={handleAddModel} icon={Plus} className="w-full h-[42px]">Добавить</Button></div>
+              <div className="md:col-span-2"><Select label="Сетка" value={newModel.gridId || defaultGridId} onChange={e => setNewModel({...newModel, gridId: parseInt(e.target.value)})}>{sizeGrids.map(g => (<option key={g.id} value={g.id}>{g.name} ({g.min}-{g.max})</option>))}</Select></div>
+              {/* ТОЛЬКО ПЛЮСИК, ЗЕЛЕНАЯ */}
+              <div className="md:col-span-2"><Button onClick={handleAddModel} icon={Plus} variant="success" className="w-full"></Button></div>
           </div>
-          
-          <div className="relative">
-             <Search className="absolute left-4 top-3 text-gray-400" size={20} />
-             <input className="w-full border border-gray-200 bg-gray-50 p-2.5 pl-12 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-gray-400" placeholder="Поиск по артикулу или цвету..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
+          <div className="relative"><Search className="absolute left-3 top-3 text-gray-400" size={18} /><input className="ui-input pl-10" placeholder="Поиск по артикулу..." value={search} onChange={e => setSearch(e.target.value)} /></div>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-                <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider font-semibold">
-                    <tr>
-                        <th className="p-4 pl-6 w-[30%]">Артикул</th>
-                        <th className="p-4 w-[25%]">Цвет</th>
-                        <th className="p-4 w-[20%]">Цена ({mainCurrency})</th>
-                        <th className="p-4 w-[15%]">Сетка</th>
-                        <th className="p-4 pr-6 text-right w-[10%]">Действия</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 text-sm">
+      <div className="ui-table-wrapper flex-1">
+        <div className="overflow-auto custom-scrollbar flex-1">
+            <table className="ui-table">
+                <thead><tr><th className="ui-th pl-8">Артикул</th><th className="ui-th">Цвет</th><th className="ui-th">Цена ({mainCurrency})</th><th className="ui-th">Сетка</th><th className="ui-th text-right pr-8">Действия</th></tr></thead>
+                <tbody>
                 {paginatedModels.map(m => (
-                    <tr key={m.id} className="hover:bg-blue-50/30 transition-colors group">
-                        <td className="p-4 pl-6 font-bold text-gray-800">{m.sku}</td>
-                        <td className="p-4 text-gray-600">{m.color}</td>
-                        <td className="p-4 font-mono text-green-600 font-bold bg-green-50/50 w-fit rounded">{convertPrice(m.price, mainCurrency, settings.exchangeRates)}</td>
-                        <td className="p-4 text-blue-600 text-xs font-medium bg-blue-50/50 rounded w-fit whitespace-nowrap">{getGridLabel(m.gridId)}</td>
-                        <td className="p-4 pr-6 text-right">
-                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => openEditModal(m)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors"><Edit size={16}/></button>
-                                <button onClick={() => setConfirmDeleteId(m.id)} className="p-2 text-gray-400 hover:bg-red-100 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                    <tr key={m.id} className="ui-tr">
+                        <td className="ui-td pl-8 font-bold text-gray-900">{m.sku}</td>
+                        <td className="ui-td text-gray-600">{m.color}</td>
+                        <td className="ui-td font-bold text-green-600 font-mono">{convertPrice(m.price, mainCurrency, settings.exchangeRates)}</td>
+                        <td className="ui-td"><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold">{getGridLabel(m.gridId)}</span></td>
+                        <td className="ui-td text-right pr-8">
+                            <div className="ui-actions">
+                                <Button onClick={() => openEditModal(m)} variant="primary" icon={Edit} className="w-9 h-9 px-0"/>
+                                <Button onClick={() => setConfirmDeleteId(m.id)} variant="danger" icon={Trash2} className="w-9 h-9 px-0"/>
                             </div>
                         </td>
                     </tr>
                 ))}
-                {filteredModels.length === 0 && <tr><td colSpan="5" className="p-12 text-center text-gray-400">Моделей не найдено</td></tr>}
                 </tbody>
             </table>
         </div>
       </div>
       
       <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
-
-      <Modal title="Редактировать модель" isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} footer={<Button onClick={handleSaveEdit} icon={Plus}>Сохранить</Button>}>
+      
+      <Modal title="Редактировать модель" isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} footer={<Button onClick={handleSaveEdit} variant="success">Сохранить</Button>}>
         <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4"><Input label="Артикул" value={editingModel.sku} onChange={e => setEditingModel({...editingModel, sku: e.target.value})} autoFocus/><Input label="Цвет" value={editingModel.color} onChange={e => setEditingModel({...editingModel, color: e.target.value})}/></div>
-            <div className="grid grid-cols-2 gap-4">
-                <Input label={`Цена (${mainCurrency})`} type="number" value={editingModel.price} onChange={e => setEditingModel({...editingModel, price: e.target.value})}/>
-                <Select label="Сетка" value={editingModel.gridId || ''} onChange={e => setEditingModel({...editingModel, gridId: parseInt(e.target.value)})}>
-                    {sizeGrids.map(g => (<option key={g.id} value={g.id}>{g.name} ({g.min}-{g.max})</option>))}
-                </Select>
-            </div>
+            <div className="grid grid-cols-2 gap-4"><Input label="Артикул" value={editingModel.sku} onChange={e => setEditingModel({...editingModel, sku: e.target.value})}/><Input label="Цвет" value={editingModel.color} onChange={e => setEditingModel({...editingModel, color: e.target.value})}/></div>
+            <div className="grid grid-cols-2 gap-4"><Input label="Цена" type="number" value={editingModel.price} onChange={e => setEditingModel({...editingModel, price: e.target.value})}/><Select label="Сетка" value={editingModel.gridId || ''} onChange={e => setEditingModel({...editingModel, gridId: parseInt(e.target.value)})}>{sizeGrids.map(g => (<option key={g.id} value={g.id}>{g.name}</option>))}</Select></div>
         </div>
       </Modal>
-      {confirmDeleteId && <Modal title="Удаление" onClose={() => setConfirmDeleteId(null)} footer={<><Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Отмена</Button><Button variant="danger" onClick={handleDeleteModel}>Удалить</Button></>}><p className="text-center text-gray-600">Удалить эту модель?</p></Modal>}
+      {confirmDeleteId && <Modal title="Удаление" onClose={() => setConfirmDeleteId(null)} footer={<><Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Отмена</Button><Button variant="danger" onClick={handleDeleteModel}>Удалить</Button></>}><p className="text-center text-gray-600">Вы уверены?</p></Modal>}
     </div>
   );
 };
-
 export default ModelsPage;

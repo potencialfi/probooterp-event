@@ -1652,6 +1652,42 @@
   ],
   "orders": [
     {
+      "date": "2025-12-14T19:07:35.715Z",
+      "clientId": 1765490228310,
+      "items": [
+        {
+          "id": 1765471945442.8567,
+          "sku": "111",
+          "color": "11",
+          "price": 0.26,
+          "gridId": 1,
+          "modelId": 1765471945442.8567,
+          "qty": 180,
+          "note": "40(15), 41(30), 42(45), 43(45), 44(30), 45(15)",
+          "sizes": {
+            "40": 15,
+            "41": 30,
+            "42": 45,
+            "43": 45,
+            "44": 30,
+            "45": 15
+          },
+          "discountPerPair": 0,
+          "total": 46.800000000000004
+        }
+      ],
+      "total": 46.800000000000004,
+      "lumpDiscount": 0,
+      "payment": {
+        "originalAmount": 0,
+        "originalCurrency": "USD",
+        "rateAtMoment": 1,
+        "prepaymentInUSD": 0
+      },
+      "id": 1765738347672,
+      "orderId": 3
+    },
+    {
       "date": "2025-12-14T13:34:14.325Z",
       "clientId": 1765490228312,
       "items": [
