@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { FileText, Eye, Trash2, Search, Edit } from 'lucide-react';
 import { Button, Modal } from '../components/UI';
 import InvoicePreview from '../components/InvoicePreview';
-import { convertPrice, normalizePhone } from '../utils'; // Используем normalizePhone
-import { apiCall } from '../api'; 
+import { convertPrice, exportSingleOrderXLSX } from '../utils'; // Убрали apiCall отсюда
+import { apiCall } from '../api'; // Добавили правильный импорт apiCall
 
 const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit }) => {
   const [viewId, setViewId] = useState(null);
@@ -16,26 +16,29 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
   
   if (orderToView) {
     const client = clients.find(c => c.id === orderToView.clientId) || { name: 'Удален', city: '', phone: '' };
-    const orderForPreview = { ...orderToView, client: { name: client.name, city: client.city, phone: client.phone } };
-    return <InvoicePreview order={orderForPreview} settings={settings} onBack={() => setViewId(null)} />;
+    
+    const orderForPreview = {
+        ...orderToView,
+        client: { name: client.name, city: client.city, phone: client.phone },
+    };
+
+    return (
+      <InvoicePreview 
+          order={orderForPreview}
+          settings={settings}
+          onBack={() => setViewId(null)}
+      />
+    );
   }
 
   const filteredOrders = orders.filter(o => {
       const client = clients.find(c => c.id === o.clientId);
       const searchLower = search.toLowerCase();
       
-      // 1. Нормализация поискового запроса (только цифры)
-      const searchClean = normalizePhone(search); 
-      
       const idMatch = String(o.orderId || o.id).includes(searchLower);
       const nameMatch = (client?.name || '').toLowerCase().includes(searchLower);
+      const phoneMatch = (client?.phone || '').includes(searchLower);
       
-      // 2. Поиск по телефону: ищем чистое совпадение цифр
-      const clientPhoneClean = normalizePhone(client?.phone || '');
-      
-      // Логика: если ввели "066", ищем, входит ли "066" в "38066..." или "066..."
-      const phoneMatch = clientPhoneClean.includes(searchClean);
-
       return idMatch || nameMatch || phoneMatch;
   });
 
@@ -50,13 +53,18 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
       }
   };
 
+  const handleDownload = (order) => {
+      const client = clients.find(c => c.id === order.clientId) || { name: 'Unknown', city: '', phone: '' };
+      exportSingleOrderXLSX(order, client, settings);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
         
       {/* Заголовок */}
       <h2 className="text-2xl font-bold text-gray-800 tracking-tight">История заказов</h2>
       
-      {/* Поиск (Растянут на всю ширину) */}
+      {/* Поиск */}
       <div className="relative w-full">
           <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
           <input 
@@ -85,6 +93,7 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
             {filteredOrders.map(o => {
                 const client = clients.find(c => c.id === o.clientId);
                 const totalPairs = o.items.reduce((acc, i) => acc + i.qty, 0);
+
                 return (
                 <tr key={o.id} className="hover:bg-blue-50/50 transition-colors group">
                     <td className="p-4 font-mono text-gray-900 font-bold">{o.orderId || '?'}</td>
@@ -92,10 +101,13 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
                     <td className="p-4 text-gray-900 font-medium">{client?.name || 'Удален'}</td>
                     <td className="p-4 text-gray-500 font-mono text-xs">{client?.phone || '-'}</td>
                     <td className="p-4 text-center text-gray-700 bg-gray-50/50 font-medium">{totalPairs}</td>
-                    <td className="p-4 text-right font-bold text-green-600">{convertPrice(o.total, mainCurrency, settings.exchangeRates)} {mainCurrency}</td>
+                    <td className="p-4 text-right font-bold text-green-600">
+                        {convertPrice(o.total, mainCurrency, settings.exchangeRates)} {mainCurrency}
+                    </td>
                     <td className="p-4 text-right">
                         <div className="flex justify-end gap-1">
                             <button onClick={() => setViewId(o.id)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors" title="Открыть"><Eye size={18}/></button>
+                            <button onClick={() => handleDownload(o)} className="p-2 text-gray-500 hover:bg-gray-100 hover:text-green-600 rounded-lg transition-colors" title="Excel"><Download size={18}/></button>
                             <button onClick={() => onEdit(o)} className="p-2 text-amber-500 hover:bg-amber-100 rounded-lg transition-colors" title="Редактировать"><Edit size={18}/></button>
                             <button onClick={() => setDeleteId(o.id)} className="p-2 text-gray-400 hover:bg-red-100 hover:text-red-500 rounded-lg transition-colors" title="Удалить"><Trash2 size={18}/></button>
                         </div>
@@ -107,7 +119,12 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
         </table>
         </div>
       </div>
-      {deleteId && <Modal title="Удаление заказа" onClose={() => setDeleteId(null)} footer={<><Button variant="secondary" onClick={() => setDeleteId(null)}>Отмена</Button><Button variant="danger" onClick={handleDelete}>Удалить</Button></>}><div className="text-center py-4"><div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500"><Trash2 size={32}/></div><p className="text-gray-800 font-bold text-lg">Вы уверены?</p><p className="text-gray-500 mt-2">Заказ <b>#{orders.find(o=>o.id===deleteId)?.orderId}</b> будет удален.</p></div></Modal>}
+
+      {deleteId && (
+          <Modal title="Удаление заказа" onClose={() => setDeleteId(null)} footer={<><Button variant="secondary" onClick={() => setDeleteId(null)}>Отмена</Button><Button variant="danger" onClick={handleDelete}>Удалить</Button></>}>
+              <div className="text-center py-4"><div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500"><Trash2 size={32}/></div><p className="text-gray-800 font-bold text-lg">Вы уверены?</p><p className="text-gray-500 mt-2">Заказ <b>#{orders.find(o=>o.id===deleteId)?.orderId}</b> будет удален.</p></div>
+          </Modal>
+      )}
     </div>
   );
 };

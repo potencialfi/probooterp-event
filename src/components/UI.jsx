@@ -1,99 +1,111 @@
-import React, { useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { Check, AlertTriangle, X } from 'lucide-react';
+import React from 'react';
+import { X, Check } from 'lucide-react';
 
-export const Button = ({ children, onClick, variant = 'primary', size = 'md', className = '', icon: Icon, disabled }) => {
-  const baseStyle = "flex items-center gap-2 rounded-xl transition-all duration-200 font-medium justify-center active:scale-95 disabled:opacity-50 disabled:pointer-events-none";
-  const sizes = { sm: "px-2 py-1 text-xs", md: "px-4 py-2.5 text-sm", compact: "px-3 py-2 text-sm", lg: "px-6 py-3 text-lg" };
+export const Button = ({ children, onClick, variant = 'primary', size = 'md', icon: Icon, className = '', disabled = false, ...props }) => {
+  const baseStyle = "flex items-center justify-center gap-2 font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed";
+  
   const variants = {
     primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-200",
-    success: "bg-green-600 text-white hover:bg-green-700 shadow-md shadow-green-200",
-    danger: "bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-200",
-    secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm",
-    outline: "border border-gray-300 text-gray-700 hover:bg-gray-50",
-    ghost: "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+    secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50",
+    danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100",
+    success: "bg-green-600 text-white hover:bg-green-700 shadow-md shadow-green-200"
   };
+  
+  const sizes = {
+    sm: "px-3 py-1.5 text-xs",
+    md: "px-4 py-2.5 text-sm",
+    lg: "px-6 py-3.5 text-base",
+    compact: "px-2 py-1 text-xs"
+  };
+
   return (
-    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${sizes[size] || sizes.md} ${variants[variant]} ${className}`}>
-      {Icon && <Icon size={size === 'sm' ? 16 : 18} />}
+    <button 
+      onClick={onClick} 
+      className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`} 
+      disabled={disabled}
+      {...props}
+    >
+      {Icon && <Icon size={size === 'lg' ? 20 : 16} />}
       {children}
     </button>
   );
 };
 
-export const Input = ({ label, error, icon: Icon, className, ...props }) => (
-  <div className={`flex flex-col gap-1.5 w-full text-left relative ${className}`}>
-    {label && <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</label>}
+export const Input = ({ label, icon: Icon, className = '', ...props }) => (
+  <div className={className}>
+    {label && <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 ml-1">{label}</label>}
     <div className="relative">
-      {Icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Icon size={18} /></div>}
+      {Icon && <Icon className="absolute left-3.5 top-3 text-gray-400" size={18} />}
       <input 
-        className={`border rounded-xl ${Icon ? 'pl-10' : 'px-4'} pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full transition-all placeholder:text-gray-300 ${error ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`} 
+        className={`w-full border border-gray-200 bg-gray-50/50 rounded-xl ${Icon ? 'pl-10' : 'pl-4'} pr-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all`}
         {...props} 
       />
     </div>
-    {error && <span className="text-xs text-red-500 font-bold flex items-center gap-1 animate-fade-in"><AlertTriangle size={12}/> {error}</span>}
   </div>
 );
 
-export const Toast = ({ message, type, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-  const isSuccess = type === 'success';
-  return createPortal(
-    <div className={`fixed top-6 left-1/2 md:left-[calc(50%+9rem)] transform -translate-x-1/2 z-[110] flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl animate-slide-down transition-all duration-300 border ${isSuccess ? 'bg-white border-green-100 text-gray-800' : 'bg-white border-red-100 text-gray-800'}`}>
-      <div className={`rounded-full p-2 ${isSuccess ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-        {isSuccess ? <Check size={20} strokeWidth={3} /> : <AlertTriangle size={20} />}
-      </div>
-      <div>
-        <h4 className={`font-bold text-sm leading-tight ${isSuccess ? 'text-green-700' : 'text-red-700'}`}>{isSuccess ? 'Успешно' : 'Ошибка'}</h4>
-        <p className="text-sm text-gray-600 leading-tight">{message}</p>
-      </div>
-      <button onClick={onClose} className="ml-4 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"><X size={18}/></button>
-    </div>, document.body
-  );
+// ДОБАВЛЕН КОМПОНЕНТ SELECT
+export const Select = ({ label, value, onChange, children, className = '', ...props }) => (
+  <div className={className}>
+    {label && <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 ml-1">{label}</label>}
+    <div className="relative">
+        <select
+            className="w-full border border-gray-200 bg-gray-50/50 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
+            value={value}
+            onChange={onChange}
+            {...props}
+        >
+            {children}
+        </select>
+        <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-500">
+            <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+        </div>
+    </div>
+  </div>
+);
+
+export const Modal = ({ title, children, onClose, footer, isOpen = true }) => {
+    if(!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center p-5 border-b border-gray-100">
+                    <h3 className="font-bold text-xl text-gray-800">{title}</h3>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><X size={20}/></button>
+                </div>
+                <div className="p-6">{children}</div>
+                {footer && <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">{footer}</div>}
+            </div>
+        </div>
+    );
 };
 
-export const Modal = ({ title, children, onClose, footer }) => {
-  return createPortal(
-    <div className="fixed inset-0 md:left-72 bg-gray-900/20 flex items-center justify-center z-[100] animate-fade-in backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all scale-100 border border-gray-100">
-        <div className="flex justify-between items-center p-5 border-b border-gray-100">
-          <h3 className="font-bold text-xl text-gray-800">{title}</h3>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-400 hover:text-gray-600"/></button>
-        </div>
-        <div className="p-6">{children}</div>
-        {footer && <div className="p-4 border-t border-gray-50 bg-gray-50/50 flex justify-end gap-2">{footer}</div>}
-      </div>
-    </div>, document.body
-  );
-};
+export const Toast = ({ message, type = 'success', onClose }) => (
+    <div className={`fixed bottom-6 right-6 z-[60] flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl animate-slide-up text-white font-medium ${type === 'error' ? 'bg-red-500' : 'bg-gray-800'}`}>
+        {type === 'success' ? <Check size={20} className="text-green-400"/> : <X size={20}/>}
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-2 opacity-70 hover:opacity-100"><X size={16}/></button>
+    </div>
+);
 
 export const ImportResultModal = ({ result, onClose }) => {
-  if (!result) return null;
-  return (
-    <Modal title="Результаты импорта" onClose={onClose} footer={<Button onClick={onClose} variant="primary">Отлично</Button>}>
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-green-50 p-4 rounded-xl text-center border border-green-100">
-            <div className="text-3xl font-bold text-green-600 mb-1">{result.added}</div>
-            <div className="text-xs text-green-600/80 uppercase font-bold tracking-wider">Добавлено</div>
-          </div>
-          <div className="bg-blue-50 p-4 rounded-xl text-center border border-blue-100">
-            <div className="text-3xl font-bold text-blue-600 mb-1">{result.updated}</div>
-            <div className="text-xs text-blue-600/80 uppercase font-bold tracking-wider">Обновлено</div>
-          </div>
-        </div>
-        {result.errors.length > 0 ? (
-          <div className="mt-4">
-            <div className="text-sm font-bold text-red-600 mb-2">Ошибки ({result.errors.length}):</div>
-            <div className="bg-red-50 border border-red-100 rounded-lg max-h-40 overflow-y-auto p-3 text-sm text-red-700 space-y-1 custom-scrollbar">
-              {result.errors.map((err, idx) => <div key={idx} className="border-b border-red-100 last:border-0 pb-1">{err}</div>)}
+    if (!result) return null;
+    const { added, updated, errors } = result;
+    return (
+        <Modal title="Результат импорта" onClose={onClose} footer={<Button onClick={onClose}>Закрыть</Button>}>
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-green-50 p-4 rounded-xl text-center"><div className="text-2xl font-bold text-green-600">{added}</div><div className="text-xs text-green-700 font-bold uppercase">Добавлено</div></div>
+                    <div className="bg-blue-50 p-4 rounded-xl text-center"><div className="text-2xl font-bold text-blue-600">{updated}</div><div className="text-xs text-blue-700 font-bold uppercase">Обновлено</div></div>
+                </div>
+                {errors && errors.length > 0 && (
+                    <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                        <div className="font-bold text-red-700 mb-2 text-sm flex items-center gap-2"><X size={16}/> Ошибки ({errors.length})</div>
+                        <ul className="text-xs text-red-600 space-y-1 max-h-32 overflow-y-auto custom-scrollbar">{errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
+                    </div>
+                )}
+                {errors.length === 0 && <div className="text-center text-gray-500 text-sm">Ошибок нет, все отлично!</div>}
             </div>
-          </div>
-        ) : <div className="text-center text-gray-400 text-sm mt-2 flex items-center justify-center gap-2"><Check size={16}/> Ошибок нет</div>}
-      </div>
-    </Modal>
-  );
+        </Modal>
+    );
 };

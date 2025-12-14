@@ -22,7 +22,6 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
     useEffect(() => {
         setGrids(settings.sizeGrids || []);
         setBoxTemplates(settings.boxTemplates || {});
-        // Устанавливаем выбранную сетку на дефолтную, если она не выбрана
         setSelectedGridId(settings.defaultSizeGridId || (settings.sizeGrids?.[0]?.id || null));
     }, [settings]);
 

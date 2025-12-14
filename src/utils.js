@@ -4,20 +4,13 @@ export const formatPhoneNumber = (value) => {
   if (!value) return '';
   const digits = String(value).replace(/\D/g, '');
   let clean = digits;
-  
-  if (digits.length === 10 && digits.startsWith('0')) {
-    clean = '38' + digits;
-  }
-  
-  if (clean.length === 12 && clean.startsWith('380')) {
-    return `+${clean.slice(0, 3)} ${clean.slice(3, 5)} ${clean.slice(5, 8)} ${clean.slice(8, 10)} ${clean.slice(10, 12)}`;
-  }
+  if (digits.length === 10 && digits.startsWith('0')) clean = '38' + digits;
+  if (clean.length === 12 && clean.startsWith('380')) return `+${clean.slice(0, 3)} ${clean.slice(3, 5)} ${clean.slice(5, 8)} ${clean.slice(8, 10)} ${clean.slice(10, 12)}`;
   return value; 
 };
 
 export const getNoun = (number, one, two, five) => {
-  let n = Math.abs(number);
-  n %= 100;
+  let n = Math.abs(number); n %= 100;
   if (n >= 5 && n <= 20) return five;
   n %= 10;
   if (n === 1) return one;
@@ -25,14 +18,12 @@ export const getNoun = (number, one, two, five) => {
   return five;
 };
 
-// Конвертация цены из USD (база) в целевую валюту
 export const convertPrice = (priceInUSD, currency, rates) => {
   if (!currency || currency === 'USD') return Number(priceInUSD).toFixed(2);
   const rate = rates?.[currency.toLowerCase()] || 1;
   return (priceInUSD * rate).toFixed(2);
 };
 
-// Конвертация в USD (база) из другой валюты
 export const convertToUSD = (amount, currency, rates) => {
   if (!amount) return 0;
   if (!currency || currency === 'USD') return Number(amount);
@@ -42,7 +33,6 @@ export const convertToUSD = (amount, currency, rates) => {
 
 export const CURRENCY_CODES = { USD: 'USD', EUR: 'EUR', UAH: 'UAH' };
 
-// --- Excel Helpers ---
 export async function ensureXLSX() {
   if (window.XLSX) return window.XLSX;
   return new Promise((resolve, reject) => {
@@ -64,26 +54,64 @@ export async function handleExportExcel(data, filename) {
   } catch (e) { console.error(e); }
 }
 
-export async function exportSingleOrderXLSX(order, client) {
+export async function exportSingleOrderXLSX(order, client, settings) {
     try {
         const XLSX = await ensureXLSX();
-        const rows = [
-            ["НАКЛАДНАЯ", `Заказ №${order.orderId || order.id}`],
-            ["Дата", new Date(order.date).toLocaleDateString()],
-            [], ["КЛИЕНТ"], ["Имя", client.name], ["Город", client.city], ["Телефон", client.phone],
-            [], ["ТОВАРЫ"], ["Артикул", "Цвет", "Размеры", "Кол-во", "Цена (USD)", "Сумма (USD)"],
-        ];
-        order.items.forEach(item => {
-            const sizesStr = item.sizes ? Object.entries(item.sizes).filter(([_, q]) => q > 0).map(([s, q]) => `${s}(${q})`).join(', ') : item.note;
-            rows.push([item.sku, item.color, sizesStr, item.qty, item.price, item.total]);
-        });
-        rows.push([]);
-        rows.push(["ИТОГО", "", "", order.items.reduce((a,b)=>a+b.qty,0), "", order.total]);
-        if (order.payment && order.payment.originalAmount) {
-             rows.push(["ОПЛАЧЕНО", "", "", "", "", `${order.payment.originalAmount} ${order.payment.originalCurrency}`]);
+        const mainCurrency = settings?.mainCurrency || 'USD';
+        const brandName = settings?.brandName || 'SHOE EXPO';
+        const brandPhones = settings?.brandPhones?.join(', ') || '';
+        const rates = settings?.exchangeRates;
+
+        const items = order.items || [];
+        const grossTotalUSD = items.reduce((acc, item) => acc + (item.price * item.qty), 0);
+        const totalPairDiscountUSD = items.reduce((acc, item) => acc + ((item.discountPerPair || 0) * item.qty), 0);
+        const lumpDiscountUSD = parseFloat(order.lumpDiscount) || 0;
+        const totalDiscountUSD = totalPairDiscountUSD + lumpDiscountUSD;
+        const netTotalUSD = Math.max(0, grossTotalUSD - totalDiscountUSD);
+
+        const payment = order.payment || {};
+        const prepaymentOriginal = payment.originalAmount || 0;
+        const prepaymentCurrency = payment.originalCurrency || mainCurrency;
+        let prepaymentInUSD = payment.prepaymentInUSD;
+        if (prepaymentInUSD === undefined && prepaymentOriginal > 0) {
+            if (prepaymentCurrency === 'USD') prepaymentInUSD = prepaymentOriginal; else prepaymentInUSD = 0;
         }
+        const remainingUSD = Math.max(0, netTotalUSD - (prepaymentInUSD || 0));
+
+        const rows = [
+            [brandName, "", "", "", `Заказ №${order.orderId || order.id}`],
+            [brandPhones, "", "", "", new Date(order.date).toLocaleDateString()],
+            [], ["КЛИЕНТ", "", "", "", "ДЕТАЛИ"],
+            [client.name, "", "", "", "Позиций:", items.length],
+            [client.city, "", "", "", "Всего пар:", items.reduce((a,b)=>a+b.qty,0)],
+            [client.phone],
+            [],
+            ["Модель / Цвет", "Размеры", "Кол-во", "Цена", "Сумма"],
+        ];
+
+        items.forEach(item => {
+            const sizesStr = item.sizes ? Object.entries(item.sizes).filter(([_, q]) => q > 0).map(([s, q]) => `${s}(${q})`).join(', ') : item.note;
+            const price = convertPrice(item.price, mainCurrency, rates);
+            const total = convertPrice(item.price * item.qty, mainCurrency, rates);
+            rows.push([`${item.sku} / ${item.color}`, sizesStr, item.qty, price, total]);
+        });
+
+        rows.push([]);
+        const grossVal = convertPrice(grossTotalUSD, mainCurrency, rates);
+        const discountVal = convertPrice(totalDiscountUSD, mainCurrency, rates);
+        const remainingVal = convertPrice(remainingUSD, mainCurrency, rates);
+
+        if (totalDiscountUSD > 0 || prepaymentOriginal > 0) rows.push(["", "", "", "Сумма:", `${grossVal} ${mainCurrency}`]);
+        if (totalDiscountUSD > 0) rows.push(["", "", "", "Скидка:", `-${discountVal} ${mainCurrency}`]);
+        if (prepaymentOriginal > 0) {
+             rows.push(["", "", "", "Оплачено:", `${prepaymentOriginal} ${prepaymentCurrency}`]);
+             rows.push(["", "", "", "Остаток:", `${remainingVal} ${mainCurrency}`]);
+        } else {
+             rows.push(["", "", "", "ИТОГО:", `${remainingVal} ${mainCurrency}`]);
+        }
+
         const ws = XLSX.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [{wch:20}, {wch:15}, {wch:40}, {wch:10}, {wch:12}, {wch:15}];
+        ws['!cols'] = [{wch:30}, {wch:40}, {wch:10}, {wch:15}, {wch:20}];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Order");
         XLSX.writeFile(wb, `Order_${order.orderId || order.id}.xlsx`);

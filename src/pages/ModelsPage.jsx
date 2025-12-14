@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Edit, Trash2, Search, Download, Upload, DollarSign, Box, Ruler } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Download, Upload, DollarSign, Ruler } from 'lucide-react';
 import { Button, Input, Modal, Select } from '../components/UI';
 import { apiCall } from '../api';
 import { convertPrice, handleExportExcel, convertToUSD } from '../utils';
@@ -16,15 +16,12 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
   const sizeGrids = settings?.sizeGrids || [];
   const defaultGridId = settings?.defaultSizeGridId || (sizeGrids[0]?.id || null);
 
-  // Установка дефолтной сетки при открытии модалки
   const handleOpenModal = (model = initialModel) => {
-      // Конвертируем цену в локальную валюту для отображения в инпуте
       const priceForInput = model.price ? convertPrice(model.price, mainCurrency, settings.exchangeRates) : '';
       
       setCurrentModel({
           ...model,
           price: priceForInput,
-          // Устанавливаем gridId: из модели, или дефолтный, или null
           gridId: model.gridId || defaultGridId
       });
       setIsModalOpen(true);
@@ -36,10 +33,8 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
       return;
     }
     
-    // Конвертируем цену обратно в USD для сохранения в базу
     const priceUSD = convertToUSD(parseFloat(currentModel.price) || 0, mainCurrency, settings.exchangeRates);
     
-    // Модель для отправки на сервер
     const modelData = { 
         ...currentModel, 
         price: priceUSD,
@@ -48,12 +43,10 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
     
     try {
       if (currentModel.id) {
-        // Редактирование
         const updated = await apiCall(`/models/${currentModel.id}`, 'PUT', modelData);
         setModels(models.map(m => m.id === updated.id ? updated : m));
         triggerToast("Модель обновлена");
       } else {
-        // Создание
         const newModel = await apiCall('/models', 'POST', modelData);
         setModels([newModel, ...models]);
         triggerToast("Модель добавлена");
@@ -89,7 +82,7 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
       const data = filteredModels.map(m => ({
           Артикул: m.sku,
           Цвет: m.color,
-          Цена_USD: m.price, // Экспортируем в USD, чтобы не было путаницы при импорте
+          Цена_USD: m.price,
           'Сетка ID': m.gridId,
           'Название сетки': sizeGrids.find(g => g.id === m.gridId)?.name || 'Неизвестно'
       }));
@@ -160,7 +153,7 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
         title={currentModel.id ? 'Редактировать модель' : 'Добавить новую модель'} 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        footer={<Button onClick={handleSaveModel} icon={Save}>Сохранить</Button>}
+        footer={<Button onClick={handleSaveModel} icon={Save} disabled={!currentModel.gridId}>Сохранить</Button>}
       >
         <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
