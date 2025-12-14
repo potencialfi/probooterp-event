@@ -30,7 +30,7 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
   return (
     <div className="page-container">
       <PageHeader title="История заказов" subtitle={`Всего: ${orders.length}`}>
-         <div className="relative w-full md:w-80"><Search className="absolute left-3 top-3.5 text-gray-400" size={20} /><input className="ui-input pl-12" placeholder="Поиск..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+         <div className="relative w-full md:w-80"><Search className="absolute left-3 top-3.5 text-gray-400" size={20} /><input className="ui-input pl-10" placeholder="Поиск..." value={search} onChange={e => setSearch(e.target.value)} /></div>
       </PageHeader>
 
       <div className="ui-table-wrapper flex-1">
@@ -42,20 +42,18 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
                 const client = clients.find(c => c.id === o.clientId);
                 return (
                 <tr key={o.id} className="ui-tr">
-                    <td className="ui-td pl-8 font-mono font-bold text-gray-900">{o.orderId || o.id}</td>
-                    <td className="ui-td text-gray-500">{new Date(o.date).toLocaleDateString()}</td>
-                    <td className="ui-td font-medium">{client?.name || 'Удален'}</td>
-                    <td className="ui-td font-mono text-base text-gray-500">{client?.phone || '-'}</td>
-                    <td className="ui-td text-center"><span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-xl font-bold text-sm">{o.items.reduce((a,i)=>a+i.qty,0)}</span></td>
-                    <td className="ui-td text-right font-bold text-green-600">{convertPrice(o.total, mainCurrency, settings.exchangeRates)} {mainCurrency}</td>
+                    <td className="ui-td pl-8"><span className="ui-text-code">#{o.orderId || o.id}</span></td>
+                    <td className="ui-td"><span className="ui-text-secondary">{new Date(o.date).toLocaleDateString()}</span></td>
+                    <td className="ui-td font-bold text-gray-900">{client?.name || 'Удален'}</td>
+                    <td className="ui-td"><span className="ui-text-code">{client?.phone || '-'}</span></td>
+                    <td className="ui-td text-center"><span className="ui-badge ui-badge-neutral">{o.items.reduce((a,i)=>a+i.qty,0)}</span></td>
+                    <td className="ui-td text-right"><span className="ui-text-money">{convertPrice(o.total, mainCurrency, settings.exchangeRates)} {mainCurrency}</span></td>
                     <td className="ui-td pr-8 text-right">
-                        <div className="ui-actions">
-                            <button onClick={() => setViewId(o.id)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-xl" title="Открыть"><Eye size={24}/></button>
-                            <button onClick={() => handleDownload(o)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-xl" title="Excel"><Download size={24}/></button>
-                            {/* РЕДАКТИРОВАНИЕ - СИНИЙ */}
-                            <button onClick={() => onEdit(o)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-xl" title="Редактировать"><Edit size={24}/></button>
-                            {/* УДАЛЕНИЕ - КРАСНЫЙ */}
-                            <button onClick={() => setDeleteId(o.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl" title="Удалить"><Trash2 size={24}/></button>
+                        <div className="ui-actions-group">
+                            <Button onClick={() => setViewId(o.id)} variant="secondary" icon={Eye} className="w-9 h-9 px-0"/>
+                            <Button onClick={() => handleDownload(o)} variant="secondary" icon={Download} className="w-9 h-9 px-0"/>
+                            <Button onClick={() => onEdit(o)} variant="primary" icon={Edit} className="w-9 h-9 px-0"/>
+                            <Button onClick={() => setDeleteId(o.id)} variant="danger" icon={Trash2} className="w-9 h-9 px-0"/>
                         </div>
                     </td>
                 </tr>
@@ -67,7 +65,7 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
       </div>
       
       <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
-      {deleteId && <Modal title="Удаление" onClose={() => setDeleteId(null)} footer={<><Button variant="secondary" onClick={() => setDeleteId(null)}>Отмена</Button><Button variant="danger" onClick={handleDelete}>Удалить</Button></>}><div className="text-center py-6 text-gray-600 text-lg">Вы уверены? Заказ будет удален безвозвратно.</div></Modal>}
+      {deleteId && <Modal title="Удаление" onClose={() => setDeleteId(null)} footer={<><Button variant="secondary" onClick={() => setDeleteId(null)}>Отмена</Button><Button variant="danger" onClick={handleDelete}>Удалить</Button></>}><div className="text-center py-6 text-gray-600">Вы уверены? Заказ будет удален безвозвратно.</div></Modal>}
     </div>
   );
 };

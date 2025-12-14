@@ -7,17 +7,18 @@ html, body, #root {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  font-size: 16px; /* Стандартный размер */
+  font-size: 14px;
   background-color: #f8fafc;
+  color: #0f172a;
 }
 
-.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
 
 @layer components {
-  /* --- КОНТЕЙНЕРЫ --- */
+  /* --- 1. КОНТЕЙНЕРЫ --- */
   .page-container {
     @apply h-full flex flex-col p-6 gap-6 overflow-hidden bg-slate-50 animate-fade-in;
   }
@@ -26,95 +27,130 @@ html, body, #root {
     @apply bg-white p-5 rounded-2xl shadow-sm border border-gray-200;
   }
 
-  /* --- ТИПОГРАФИКА --- */
+  /* --- 2. ТИПОГРАФИКА --- */
   .page-title {
-    @apply text-3xl font-bold text-gray-800 tracking-tight;
+    @apply text-3xl font-bold text-gray-900 tracking-tight;
   }
-  
   .page-subtitle {
     @apply text-sm text-gray-500 font-medium mt-1;
   }
-
   .section-title {
     @apply text-base font-bold text-gray-800 flex items-center gap-2 mb-4 pb-2 border-b border-gray-100 uppercase tracking-wide;
   }
-
   .ui-label {
-    @apply block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1;
+    @apply block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1;
   }
 
-  /* --- ИНПУТЫ (h-11 = 44px) --- */
+  /* --- 3. ТЕКСТОВЫЕ УТИЛИТЫ (НОВОЕ) --- */
+  .ui-text-money {
+    @apply font-bold text-emerald-600 font-mono tracking-tight;
+  }
+  .ui-text-secondary {
+    @apply text-gray-500 text-sm font-medium;
+  }
+  .ui-text-code {
+    @apply font-mono text-xs text-gray-500;
+  }
+
+  /* --- 4. БЕЙДЖИ (НОВОЕ) --- */
+  .ui-badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide uppercase whitespace-nowrap;
+  }
+  .ui-badge-neutral { @apply bg-gray-100 text-gray-600; }
+  .ui-badge-success { @apply bg-emerald-50 text-emerald-700 border border-emerald-100; }
+  .ui-badge-primary { @apply bg-blue-50 text-blue-700 border border-blue-100; }
+  .ui-badge-danger  { @apply bg-red-50 text-red-700 border border-red-100; }
+  .ui-badge-warning { @apply bg-amber-50 text-amber-700 border border-amber-100; }
+
+  /* --- 5. УВЕДОМЛЕНИЯ / АЛЕРТЫ (НОВОЕ) --- */
+  .ui-alert {
+    @apply px-4 py-3 rounded-xl flex items-center gap-3 text-sm font-medium border;
+  }
+  .ui-alert-info { @apply bg-blue-50 text-blue-700 border-blue-100; }
+  .ui-alert-danger { @apply bg-red-50 text-red-700 border-red-100; }
+  .ui-alert-warning { @apply bg-amber-50 text-amber-800 border-amber-100; }
+
+  /* --- 6. ИНПУТЫ И КНОПКИ --- */
   .ui-input {
     @apply w-full bg-white border border-gray-300 text-gray-900 text-sm font-medium 
            rounded-xl px-4 outline-none transition-all h-11
            focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 
            placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-400;
   }
-
-  /* --- КНОПКИ (h-11 = 44px) --- */
   .btn-base {
     @apply inline-flex items-center justify-center gap-2 font-bold transition-all 
            active:scale-95 disabled:opacity-60 disabled:pointer-events-none rounded-xl h-11 text-sm shadow-sm;
   }
-  
-  /* Размеры */
-  .btn-sm { @apply h-9 px-3 text-base; }
+  .btn-sm { @apply h-9 px-3 text-xs; }
   .btn-md { @apply h-11 px-5; }
-  .btn-lg { @apply h-12 px-6 text-base; }
-  
-  /* ЦВЕТА */
-  .btn-primary { 
-    @apply bg-blue-600 text-white border border-blue-600 hover:bg-blue-700 shadow-blue-100; 
-  }
-  .btn-success { 
-    @apply bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 shadow-emerald-100; 
-  }
-  .btn-danger { 
-    @apply bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 shadow-red-50; 
-  }
-  .btn-secondary { 
-    @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50; 
-  }
+  .btn-lg { @apply h-12 px-8 text-base; }
+  .btn-primary { @apply bg-blue-600 text-white border border-blue-600 hover:bg-blue-700 shadow-blue-100; }
+  .btn-success { @apply bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 shadow-emerald-100; }
+  .btn-danger { @apply bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 shadow-red-50; }
+  .btn-secondary { @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50; }
 
-  /* --- ТАБЛИЦЫ --- */
+  /* --- 7. ТАБЛИЦЫ --- */
   .ui-table-wrapper {
     @apply ui-card p-0 overflow-hidden flex flex-col;
   }
-
   .ui-table {
     @apply w-full text-left border-collapse text-sm;
   }
-
   .ui-th {
-    @apply px-5 py-3 bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider font-bold border-b border-gray-200 sticky top-0 z-10;
+    @apply px-5 py-4 bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider font-bold border-b border-gray-200 sticky top-0 z-10;
   }
-
   .ui-td {
-    @apply px-5 py-3 border-b border-gray-100 text-gray-800 font-medium;
+    @apply px-5 py-3.5 border-b border-gray-100 text-gray-700 font-medium align-middle;
   }
-
   .ui-tr {
     @apply hover:bg-blue-50/30 transition-colors cursor-default;
   }
-  
   .ui-tr:last-child .ui-td { border-bottom: none; }
-
-  .ui-actions {
+  .ui-actions-group {
     @apply flex justify-end gap-2 opacity-0 transition-opacity;
   }
-  .ui-tr:hover .ui-actions { opacity: 1; }
+  .ui-tr:hover .ui-actions-group { opacity: 1; }
 
-  /* --- МОДАЛКИ --- */
+  /* --- 8. ИНТЕРАКТИВНЫЕ ЭЛЕМЕНТЫ (НОВОЕ) --- */
+  /* Карточка выбора (для сеток, типов ящиков, списка товаров) */
+  .ui-selectable-card {
+    @apply bg-white p-4 rounded-xl border-2 transition-all cursor-pointer relative hover:shadow-md flex flex-col items-center justify-center;
+  }
+  .ui-selectable-card-active { @apply border-blue-500 bg-blue-50/50 ring-1 ring-blue-500; }
+  .ui-selectable-card-inactive { @apply border-gray-200 hover:border-blue-300 hover:bg-gray-50; }
+
+  /* Элемент списка (в корзине) */
+  .ui-list-item {
+    @apply bg-white p-4 rounded-xl border border-gray-200 transition-all hover:border-blue-300 hover:shadow-sm cursor-pointer flex justify-between items-center;
+  }
+
+  /* --- 9. DASHBOARD --- */
+  .stat-card {
+    @apply ui-card flex flex-col justify-between h-32 relative overflow-hidden;
+  }
+  .stat-label {
+    @apply flex items-center gap-2 text-gray-500 font-bold text-xs uppercase tracking-wide z-10;
+  }
+  .stat-value {
+    @apply font-black text-gray-800 z-10;
+  }
+  .val-xl { @apply text-4xl; } 
+  .val-lg { @apply text-3xl; } 
+  .val-md { @apply text-2xl; }
+  .stat-icon-bg {
+    @apply absolute -right-4 -bottom-4 opacity-10 pointer-events-none;
+  }
+
+  /* --- 10. МОДАЛКИ --- */
   .modal-overlay {
     @apply fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md animate-fade-in;
   }
-
   .modal-content {
     @apply bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-slide-up ring-1 ring-gray-200;
   }
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
 .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
