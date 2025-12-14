@@ -25,7 +25,6 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
   
-  // Начальные настройки
   const [settings, setSettings] = useState({ 
       sizeGrids: [], 
       defaultSizeGridId: null,
@@ -63,8 +62,8 @@ export default function App() {
           if(data.settings) {
              setSettings(prev => ({ ...prev, ...data.settings }));
              
+             // Обновляем валюту в черновике только если это новый заказ
              setOrderDraft(prev => {
-                 // Если мы не в режиме редактирования (нет id), обновляем валюту
                  if (!prev.id) {
                      return {
                          ...prev,
@@ -78,9 +77,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (user) {
-      loadAllData();
-    }
+    if (user) loadAllData();
   }, [user]);
   
   const triggerToast = (msg, type = 'success') => {
@@ -97,7 +94,6 @@ export default function App() {
 
   const handleEditOrder = (order) => {
       const client = clients.find(c => c.id === order.clientId);
-      
       setOrderDraft({
           id: order.id, 
           orderId: order.orderId, 
@@ -110,7 +106,6 @@ export default function App() {
           paymentCurrency: order.payment ? order.payment.originalCurrency : (settings.mainCurrency || 'USD'),
           lumpDiscount: order.lumpDiscount || ''
       });
-      
       setActiveTab('newOrder');
   };
 
@@ -122,20 +117,39 @@ export default function App() {
   const handleFileImport = async (e, endpoint, cb = null) => { 
     const file = e.target.files[0]; 
     if (!file) return; 
+    
+    // Сбрасываем value, чтобы можно было выбрать тот же файл повторно
     e.target.value = ''; 
+    
     try { 
       const XLSX = await ensureXLSX(); 
       const reader = new FileReader(); 
+      
       reader.onload = async (ev) => { 
         try { 
           const wb = XLSX.read(ev.target.result, { type: 'binary' }); 
-          const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); 
+          const wsName = wb.SheetNames[0];
+          const ws = wb.Sheets[wsName];
+          const data = XLSX.utils.sheet_to_json(ws); 
+          
+          if (data.length === 0) {
+              triggerToast("Файл пуст", 'error');
+              return;
+          }
+
           const res = await apiCall(endpoint, 'POST', data); 
-          if(cb) cb(res); else { loadAllData(); setImportResult(res); } 
-        } catch (err) { triggerToast("Ошибка структуры файла", 'error'); } 
+          if(cb) await cb(); // Перезагружаем данные
+          setImportResult(res); 
+        } catch (err) { 
+            console.error(err);
+            triggerToast("Ошибка обработки файла", 'error'); 
+        } 
       }; 
       reader.readAsBinaryString(file); 
-    } catch (err) { triggerToast("Ошибка чтения Excel", 'error'); } 
+    } catch (err) { 
+        console.error(err);
+        triggerToast("Ошибка чтения Excel", 'error'); 
+    } 
   };
 
   const handleLoginSuccess = (userData) => {
@@ -151,54 +165,29 @@ export default function App() {
   if (!user) return <LoginPage onLogin={handleLoginSuccess} />;
 
   return (
-    <div className="flex h-screen bg-slate-50 text-gray-800 font-sans">
+    <div className="flex h-screen bg-slate-50 text-gray-800 font-sans overflow-hidden">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLogout={handleLogout} />
-      <main className="flex-1 overflow-auto p-6 md:p-10 relative custom-scrollbar">
-        {activeTab === 'dashboard' && <DashboardPage orders={orders} setActiveTab={setActiveTab} settings={settings} />}
+      
+      {/* УБРАНЫ ОТСТУПЫ (p-6) из main, чтобы sticky работало корректно */}
+      <main className="flex-1 overflow-auto relative custom-scrollbar">
+        
+        {activeTab === 'dashboard' && <div className="p-6 md:p-10"><DashboardPage orders={orders} setActiveTab={setActiveTab} settings={settings} /></div>}
         
         {activeTab === 'newOrder' && (
+            <div className="p-6 md:p-10 min-h-full">
             <NewOrderPage 
-                clients={clients} 
-                setClients={setClients} 
-                models={models} 
-                sizeGrid={settings.sizeGrids} 
-                setOrders={setOrders} 
-                orders={orders} 
-                triggerToast={triggerToast} 
-                settings={settings}
-                orderDraft={orderDraft}
-                setOrderDraft={setOrderDraft}
-                clearOrderDraft={clearOrderDraft}
+                clients={clients} setClients={setClients} models={models} sizeGrid={settings.sizeGrids} 
+                setOrders={setOrders} orders={orders} triggerToast={triggerToast} settings={settings}
+                orderDraft={orderDraft} setOrderDraft={setOrderDraft} clearOrderDraft={clearOrderDraft} 
                 goToSettingsAndHighlight={goToSettingsAndHighlight}
             />
+            </div>
         )}
         
         {activeTab === 'clients' && <ClientsPage clients={clients} setClients={setClients} triggerToast={triggerToast} handleFileImport={handleFileImport} loadAllData={loadAllData} setImportResult={setImportResult}/>}
         {activeTab === 'models' && <ModelsPage models={models} setModels={setModels} triggerToast={triggerToast} handleFileImport={handleFileImport} loadAllData={loadAllData} setImportResult={setImportResult} settings={settings}/>}
-        
-        {activeTab === 'history' && (
-            <OrdersPage 
-                orders={orders} 
-                setOrders={setOrders} 
-                clients={clients} 
-                settings={settings} 
-                triggerToast={triggerToast}
-                onEdit={handleEditOrder}
-            />
-        )}
-        
-        {/* ИСПРАВЛЕНО: Передаем loadAllData */}
-        {activeTab === 'settings' && (
-            <SettingsPage 
-                apiCall={apiCall} 
-                triggerToast={triggerToast} 
-                settings={settings} 
-                setSettings={setSettings} 
-                highlightSetting={highlightSetting} 
-                setHighlightSetting={setHighlightSetting}
-                loadAllData={loadAllData} // <<-- ВОТ ЭТО ВАЖНО
-            />
-        )}
+        {activeTab === 'history' && <OrdersPage orders={orders} setOrders={setOrders} clients={clients} settings={settings} triggerToast={triggerToast} onEdit={handleEditOrder} />}
+        {activeTab === 'settings' && <SettingsPage apiCall={apiCall} triggerToast={triggerToast} settings={settings} setSettings={setSettings} highlightSetting={highlightSetting} setHighlightSetting={setHighlightSetting} loadAllData={loadAllData} />}
         
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         <ImportResultModal result={importResult} onClose={() => setImportResult(null)} />
