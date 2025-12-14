@@ -22,22 +22,19 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static(DIST_DIR));
 app.use('/images', express.static(IMAGES_DIR));
 
-// Обновленная структура данных по умолчанию
 const DEFAULT_DATA = {
   users: [{ id: 1, login: 'admin', password: '123', name: 'Администратор' }],
   clients: [],
   models: [],
   orders: [],
   settings: { 
-    // Массив сеток
     sizeGrids: [
         { id: 1, name: 'Стандарт', min: '40', max: '45', isDefault: true },
     ],
-    defaultSizeGridId: 1, // ID сетки по умолчанию
+    defaultSizeGridId: 1,
     boxTemplates: { 
-        // Шаблоны ящиков, ключом является ID сетки
         '1': { 
-            6: {40:1, 41:1, 42:2, 43:1, 44:1}, // Пример комплектации
+            6: {40:1, 41:1, 42:2, 43:1, 44:1},
         }
     }, 
     exchangeRates: { usd: 0, eur: 0, isManual: false },
@@ -66,7 +63,7 @@ const initDB = () => {
   let db = readDB();
   if (!db) {
     writeDB(DEFAULT_DATA);
-    return;
+    db = DEFAULT_DATA;
   }
   
   let changed = false;
@@ -88,19 +85,20 @@ const initDB = () => {
            isDefault: true 
        }];
        db.settings.defaultSizeGridId = 1;
-       // Удаляем старый объект sizeGrid, чтобы не мешал
        delete db.settings.sizeGrid; 
        changed = true;
   }
   
   // Миграция старых шаблонов ящиков в формат { '1': templates }
   if (db.settings && db.settings.boxTemplates) {
-       // Если это старый формат { 6:{...}, 8:{...} } и нет ключа '1', переносим
        if (!db.settings.boxTemplates['1'] && Object.keys(db.settings.boxTemplates).some(k => k.match(/^\d+$/))) {
             console.log("Migrating boxTemplates structure...");
             db.settings.boxTemplates = { '1': db.settings.boxTemplates };
             changed = true;
        }
+  } else if (db.settings && !db.settings.boxTemplates) {
+       db.settings.boxTemplates = DEFAULT_DATA.settings.boxTemplates;
+       changed = true;
   }
 
   // Миграция ID заказов
@@ -114,13 +112,24 @@ const initDB = () => {
           changed = true;
       }
   }
+  
+  // Миграция моделей: если нет gridId, присваиваем дефолтный (1)
+  if (db.models && db.models.length > 0) {
+      db.models = db.models.map(m => {
+          if (m.gridId === undefined || m.gridId === null) {
+              changed = true;
+              return { ...m, gridId: db.settings.defaultSizeGridId || 1 };
+          }
+          return m;
+      });
+  }
 
   if (changed) writeDB(db);
 };
 
 initDB();
 
-// --- Служебные функции (валидация/форматирование) ---
+// --- Служебные функции ---
 const normalizePhone = (phone) => String(phone).replace(/\D/g, '');
 const isValidPhone = (phone) => {
   const clean = normalizePhone(phone);
@@ -155,9 +164,9 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/data', (req, res) => {
   const db = readDB();
-  if (!db) return res.json(DEFAULT_DATA);
-  const safeSettings = { ...DEFAULT_DATA.settings, ...db.settings };
-  const { users, settings, ...rest } = db;
+  // Обеспечиваем, что settings всегда имеет структуру
+  const safeSettings = { ...DEFAULT_DATA.settings, ...(db ? db.settings : {}) };
+  const { users, settings, ...rest } = db || DEFAULT_DATA;
   res.json({ ...rest, settings: safeSettings });
 });
 
@@ -262,7 +271,6 @@ app.post('/api/clients/import', (req, res) => {
 // --- MODELS ---
 app.post('/api/models', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
-  // Добавляем gridId, если он пришел
   const newModel = { ...req.body, id: Date.now() };
   db.models.push(newModel);
   writeDB(db);

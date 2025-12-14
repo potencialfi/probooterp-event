@@ -9,13 +9,11 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
     const [boxTemplates, setBoxTemplates] = useState(settings.boxTemplates || {});
     const [selectedGridId, setSelectedGridId] = useState(settings.defaultSizeGridId || (grids[0] ? grids[0].id : null));
     
-    // Состояние для модального окна добавления сетки
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newGridName, setNewGridName] = useState('');
     const [newGridMin, setNewGridMin] = useState('');
     const [newGridMax, setNewGridMax] = useState('');
     
-    // Состояние для редактирования комплектации ящика
     const [editingBoxGridId, setEditingBoxGridId] = useState(null);
     const [editingBoxSize, setEditingBoxSize] = useState(null);
     const [currentBoxConfig, setCurrentBoxConfig] = useState({});
@@ -29,14 +27,7 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
     }, [settings]);
 
     const currentGrid = grids.find(g => g.id === selectedGridId);
-    const gridRange = useMemo(() => {
-        if (!currentGrid) return [];
-        const min = parseInt(currentGrid.min);
-        const max = parseInt(currentGrid.max);
-        if (isNaN(min) || isNaN(max) || min > max) return [];
-        return Array.from({ length: max - min + 1 }, (_, i) => String(min + i));
-    }, [currentGrid]);
-
+    
     const availableBoxSizes = [6, 8, 10, 12];
     const currentGridTemplates = boxTemplates[selectedGridId] || {};
 
@@ -74,20 +65,19 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
             name: newGridName,
             min: newGridMin,
             max: newGridMax,
-            isDefault: grids.length === 0 // Первая созданная сетка становится дефолтной
+            isDefault: grids.length === 0
         };
         
         const newGrids = [...grids, newGrid];
         const newDefaultId = grids.length === 0 ? newId : settings.defaultSizeGridId;
         
-        // Инициализируем пустые шаблоны для новой сетки
         const newBoxTemplates = { ...boxTemplates, [newId]: {} };
-        setBoxTemplates(newBoxTemplates); // Обновляем локально, чтобы сохранить
+        setBoxTemplates(newBoxTemplates);
         
         handleSaveSettings({ 
             sizeGrids: newGrids, 
             defaultSizeGridId: newDefaultId,
-            boxTemplates: newBoxTemplates // Сохраняем и пустые шаблоны
+            boxTemplates: newBoxTemplates
         });
 
         setIsModalOpen(false);
@@ -106,12 +96,10 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
         const newGrids = grids.filter(g => g.id !== idToDelete);
         let newDefaultId = settings.defaultSizeGridId;
         
-        // Если удаляем дефолтную, делаем дефолтной первую оставшуюся
         if (idToDelete === newDefaultId) {
             newDefaultId = newGrids[0].id;
         }
         
-        // Удаляем шаблоны ящиков, связанные с этой сеткой
         const newBoxTemplates = { ...boxTemplates };
         delete newBoxTemplates[idToDelete];
         setBoxTemplates(newBoxTemplates);
@@ -126,7 +114,7 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
     const handleSetDefault = (id) => {
         if (id === settings.defaultSizeGridId) return;
         const newGrids = grids.map(g => ({ ...g, isDefault: g.id === id }));
-        setGrids(newGrids); // Обновляем локально, чтобы чекбокс сработал
+        setGrids(newGrids);
         handleSaveSettings({ 
             sizeGrids: newGrids, 
             defaultSizeGridId: id 
@@ -144,7 +132,6 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
         
         const template = boxTemplates[gridId]?.[boxSize] || {};
         
-        // Инициализируем config нулями для всех размеров в диапазоне текущей сетки
         const min = parseInt(grid.min);
         const max = parseInt(grid.max);
         let config = {};
@@ -156,15 +143,19 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
 
     const handleSaveBoxConfig = () => {
         const totalQty = Object.values(currentBoxConfig).reduce((a, b) => a + b, 0);
+        
         if (totalQty === 0) {
             triggerToast("Ящик не может быть пустым", "error");
             return;
+        }
+        if (totalQty !== editingBoxSize) {
+             triggerToast(`Сумма пар (${totalQty}) не совпадает с размером ящика (${editingBoxSize})`, "error");
+             return;
         }
 
         const newTemplates = { ...boxTemplates };
         if (!newTemplates[editingBoxGridId]) newTemplates[editingBoxGridId] = {};
         
-        // Очищаем нули и сохраняем
         const cleanConfig = Object.fromEntries(
             Object.entries(currentBoxConfig).filter(([_, qty]) => qty > 0)
         );
@@ -299,7 +290,7 @@ const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
             )}
 
             {/* Modal для добавления сетки */}
-            <Modal title="Добавить размерную сетку" isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} footer={<Button onClick={handleAddGrid} icon={Plus}>Создать</Button>}>
+            <Modal title="Добавить размерную сетку" isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} footer={<Button onClick={handleAddGrid} icon={Plus} disabled={!newGridName || !newGridMin || !newGridMax}>Создать</Button>}>
                 <div className="space-y-4">
                     <Input label="Название сетки" value={newGridName} onChange={e => setNewGridName(e.target.value)} autoFocus placeholder="Женская / Детская / Основная"/>
                     <div className="grid grid-cols-2 gap-4">
@@ -340,7 +331,6 @@ const CurrencyManager = ({ settings, setSettings, apiCall, triggerToast, highlig
     };
 
     useEffect(() => {
-        // Загружаем курсы при первом открытии, если они 0
         if (!settings.exchangeRates.isManual && settings.exchangeRates.usd === 0) {
             handleFetchRates();
         }
@@ -414,7 +404,7 @@ const BrandingManager = ({ settings, setSettings, apiCall, triggerToast }) => {
             let logoFileName = settings.brandLogo;
             if (logoFile) {
                 logoFileName = await uploadBrandLogo(logoFile, brandName);
-                setLogoFile(null); // Очищаем файл после успешной загрузки
+                setLogoFile(null);
             }
             
             const updatedSettings = { 
@@ -509,7 +499,6 @@ const BrandingManager = ({ settings, setSettings, apiCall, triggerToast }) => {
 // --- Основной компонент SettingsPage ---
 const SettingsPage = ({ apiCall, triggerToast, settings, setSettings, highlightSetting, setHighlightSetting }) => {
     
-    // Передаем настройки и функции API во все менеджеры
     const commonProps = { apiCall, triggerToast, settings, setSettings, highlightSetting, setHighlightSetting };
     
     return (

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Edit, Trash2, Search, Download, Upload, DollarSign, Box } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Download, Upload, DollarSign, Box, Ruler } from 'lucide-react';
 import { Button, Input, Modal, Select } from '../components/UI';
 import { apiCall } from '../api';
 import { convertPrice, handleExportExcel, convertToUSD } from '../utils';
@@ -18,37 +18,43 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
 
   // Установка дефолтной сетки при открытии модалки
   const handleOpenModal = (model = initialModel) => {
+      // Конвертируем цену в локальную валюту для отображения в инпуте
+      const priceForInput = model.price ? convertPrice(model.price, mainCurrency, settings.exchangeRates) : '';
+      
       setCurrentModel({
           ...model,
-          gridId: model.gridId || defaultGridId // Используем gridId модели или дефолтный
+          price: priceForInput,
+          // Устанавливаем gridId: из модели, или дефолтный, или null
+          gridId: model.gridId || defaultGridId
       });
       setIsModalOpen(true);
   };
   
   const handleSaveModel = async () => {
     if (!currentModel.sku || !currentModel.color || !currentModel.price || !currentModel.gridId) {
-      triggerToast("Заполните все поля", 'error');
+      triggerToast("Заполните все поля (включая Сетку)", 'error');
       return;
     }
+    
+    // Конвертируем цену обратно в USD для сохранения в базу
     const priceUSD = convertToUSD(parseFloat(currentModel.price) || 0, mainCurrency, settings.exchangeRates);
+    
+    // Модель для отправки на сервер
+    const modelData = { 
+        ...currentModel, 
+        price: priceUSD,
+        gridId: parseInt(currentModel.gridId)
+    };
     
     try {
       if (currentModel.id) {
         // Редактирование
-        const updated = await apiCall(`/models/${currentModel.id}`, 'PUT', { 
-            ...currentModel, 
-            price: priceUSD,
-            gridId: currentModel.gridId
-        });
+        const updated = await apiCall(`/models/${currentModel.id}`, 'PUT', modelData);
         setModels(models.map(m => m.id === updated.id ? updated : m));
         triggerToast("Модель обновлена");
       } else {
         // Создание
-        const newModel = await apiCall('/models', 'POST', { 
-            ...currentModel, 
-            price: priceUSD,
-            gridId: currentModel.gridId
-        });
+        const newModel = await apiCall('/models', 'POST', modelData);
         setModels([newModel, ...models]);
         triggerToast("Модель добавлена");
       }
@@ -83,14 +89,13 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
       const data = filteredModels.map(m => ({
           Артикул: m.sku,
           Цвет: m.color,
-          Цена: convertPrice(m.price, mainCurrency, settings.exchangeRates),
+          Цена_USD: m.price, // Экспортируем в USD, чтобы не было путаницы при импорте
           'Сетка ID': m.gridId,
           'Название сетки': sizeGrids.find(g => g.id === m.gridId)?.name || 'Неизвестно'
       }));
       handleExportExcel(data, 'models_export');
   };
 
-  // Получение имени сетки по ID
   const getGridName = (id) => sizeGrids.find(g => g.id === id)?.name || 'Неизвестно';
   
 
@@ -101,7 +106,7 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
         <div className="flex gap-2">
             <Button onClick={() => handleExport()} variant="secondary" icon={Download}>Экспорт</Button>
             <label htmlFor="import-models">
-                <input type="file" id="import-models" accept=".xlsx" onChange={handleFileImport} className="hidden" />
+                <input type="file" id="import-models" accept=".xlsx" onChange={(e) => handleFileImport(e, '/models/import', loadAllData)} className="hidden" />
                 <Button variant="secondary" icon={Upload}>Импорт</Button>
             </label>
             <Button onClick={() => handleOpenModal()} icon={Plus}>Добавить</Button>
@@ -126,7 +131,7 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
                     <th className="p-4">Артикул</th>
                     <th className="p-4">Цвет</th>
                     <th className="p-4">Цена ({mainCurrency})</th>
-                    <th className="p-4">Сетка</th>
+                    <th className="p-4 flex items-center gap-1"><Ruler size={14}/> Сетка</th>
                     <th className="p-4 text-right">Действия</th>
                 </tr>
             </thead>
@@ -185,6 +190,12 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
                     ))}
                 </Select>
             </div>
+            {currentModel.gridId && !sizeGrids.find(g => g.id === currentModel.gridId) && (
+                <div className="text-red-500 text-sm">Выбранная сетка не найдена. Возможно, она была удалена.</div>
+            )}
+            {sizeGrids.length === 0 && (
+                <div className="text-yellow-600 text-sm">⚠ Нет размерных сеток. Перейдите в Настройки, чтобы добавить их.</div>
+            )}
         </div>
       </Modal>
 

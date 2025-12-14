@@ -5,7 +5,7 @@ import { normalizePhone, formatPhoneNumber, getNoun, convertPrice, convertToUSD 
 import { Button, Input, Modal } from '../components/UI';
 import InvoicePreview from '../components/InvoicePreview';
 
-// --- Компонент модального окна скидок (без изменений) ---
+// --- Компонент модального окна скидок ---
 const DiscountModal = ({ isOpen, onClose, onApply, cart, mainCurrency }) => {
     if (!isOpen) return null;
 
@@ -172,11 +172,12 @@ const NewOrderPage = ({
 
   const currentBoxTemplates = useMemo(() => {
       if (!currentGrid) return {};
-      return boxTemplates[currentGrid.id] || {};
+      return boxTemplates[currentGrid?.id] || {};
   }, [currentGrid, boxTemplates]);
 
-  // --- HANDLERS (Клиент, Дисконт) ---
+  // --- HANDLERS ---
   const updateDraft = (fields) => { setOrderDraft(prev => ({ ...prev, ...fields })); };
+  
   const applyDiscount = (result) => {
       if (result.type === 'lump') {
           updateDraft({ lumpDiscount: result.value });
@@ -184,19 +185,25 @@ const NewOrderPage = ({
           const discountInUSD = convertToUSD(result.value || 0, mainCurrency, settings?.exchangeRates);
           const newCart = cart.map((item, idx) => {
               if (result.indices.includes(idx)) {
-                  return { ...item, discountPerPair: discountInUSD, total: (item.price - discountInUSD) * item.qty };
+                  return { 
+                      ...item, 
+                      discountPerPair: discountInUSD, 
+                      total: (item.price - discountInUSD) * item.qty 
+                  };
               }
               return item;
           });
           updateDraft({ cart: newCart });
       }
   };
+
   const handlePhoneChange = (e) => {
     const raw = e.target.value;
     const formatted = formatPhoneNumber(raw);
     updateDraft({ clientPhone: formatted });
     setShowClientList(true);
   };
+  
   useEffect(() => {
     const cleanInput = normalizePhone(clientPhone);
     if (!cleanInput) { updateDraft({ selectedClient: null }); return; }
@@ -209,19 +216,22 @@ const NewOrderPage = ({
     if (found) { updateDraft({ selectedClient: found, clientName: found.name, clientCity: found.city }); } 
     else { updateDraft({ selectedClient: null }); }
   }, [clientPhone, clients]);
+
   const selectClientSuggestion = (client) => {
     updateDraft({ clientPhone: client.phone, clientName: client.name, clientCity: client.city, selectedClient: client });
     setShowClientList(false);
   };
-  
-  // --- HANDLERS (Товар и Корзина) ---
+
   const handleSizeChange = (size, val) => {
     const intVal = parseInt(val) || 0;
     setSizeQuantities(prev => ({ ...prev, [size]: intVal >= 0 ? intVal : 0 }));
   };
-
+  
   const addBox = (boxSize) => {
      const template = currentBoxTemplates[boxSize];
+     if (!currentGrid) {
+         triggerToast(`Не выбрана размерная сетка для модели.`, "error"); return;
+     }
      if (!template || Object.keys(template).length === 0 || Object.values(template).reduce((a,b)=>a+b,0) === 0) {
          triggerToast(`Комплектация для ящика ${boxSize} пар (сетка ${currentGrid?.name}) не задана.`, "error"); return;
      }
@@ -232,7 +242,7 @@ const NewOrderPage = ({
      });
      triggerToast(`Добавлен ящик ${boxSize} пар`);
   };
-
+  
   const addToCart = () => {
     if (!currentM) return;
     const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
@@ -240,22 +250,9 @@ const NewOrderPage = ({
     const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s}(${q})`);
     const note = noteParts.join(', ');
     
-    // Сохраняем ID сетки в товар для будущей справки
     const gridId = currentM.gridId || settings?.defaultSizeGridId || null;
 
-    updateDraft({ 
-        cart: [...cart, { 
-            ...currentM, 
-            modelId: currentM.id, 
-            qty: totalQty, 
-            note, 
-            sizes: sizeQuantities, 
-            discountPerPair: 0, 
-            total: currentM.price * totalQty,
-            gridId: gridId // Сохраняем ID сетки для этой позиции
-        }] 
-    });
-    
+    updateDraft({ cart: [...cart, { ...currentM, modelId: currentM.id, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: 0, total: currentM.price * totalQty, gridId: gridId }] });
     setSizeQuantities({}); setSelModel(''); setSearch(''); setShowModelList(false);
   };
   
@@ -266,7 +263,7 @@ const NewOrderPage = ({
       const discountInMain = convertPrice(itemToEdit.discountPerPair || 0, mainCurrency, settings.exchangeRates);
       setEditingDiscount(discountInMain === '0.00' ? '' : discountInMain);
   };
-
+  
   const saveEditedItem = () => {
       if (editingCartIndex === null) return;
       const item = cart[editingCartIndex];
@@ -283,17 +280,16 @@ const NewOrderPage = ({
       setSizeQuantities({}); 
       setEditingDiscount('');
   };
-
+  
   const deleteFromCart = (index) => {
       const newCart = cart.filter((_, x) => x !== index);
       updateDraft({ cart: newCart });
       setConfirmDeleteIndex(null);
   }
-
+  
   const saveOrder = async () => {
     if (!clientPhone || !clientName) { triggerToast("Заполните данные клиента", 'error'); return; }
     if (cart.length === 0) { triggerToast("Корзина пуста", 'error'); return; }
-    
     let finalClientId = selectedClient?.id;
     if (!finalClientId) {
         try {
@@ -303,12 +299,10 @@ const NewOrderPage = ({
             finalClientId = savedClient.id;
         } catch (e) { triggerToast(`Ошибка клиента: ${e.message}`, 'error'); return; }
     }
-
     const orderData = { 
         date: new Date().toISOString(), clientId: parseInt(finalClientId), items: cart, total: totalCartUSD, lumpDiscount: lumpDiscountUSD,
         payment: { originalAmount: Number(prepayment), originalCurrency: paymentCurrency, rateAtMoment: paymentRate, prepaymentInUSD: prepaymentInUSD }
     };
-
     try {
       if (editingId) {
           const updated = await apiCall(`/orders/${editingId}`, 'PUT', orderData);
@@ -337,8 +331,10 @@ const NewOrderPage = ({
         return false;
      });
   }, [clients, clientPhone, selectedClient]);
-  
 
+  const currentTotalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
+  const currentTotalSumUSD = currentM ? currentM.price * currentTotalQty : 0;
+  
   // --- RENDER ---
   if (showInvoice) {
       const orderForPreview = {
