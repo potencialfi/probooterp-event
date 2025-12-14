@@ -1,526 +1,491 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Settings, Ruler, Box, DollarSign, Phone, Image, Save, Plus, Trash2, Edit, CheckSquare, Square, Upload } from 'lucide-react';
-import { Button, Input, Select, Modal } from '../components/UI';
-import { apiCall, uploadBrandLogo } from '../api';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Ruler, Box, DollarSign, Briefcase, Plus, Trash2, Upload, CheckSquare, Square, Image as ImageIcon, RefreshCw, AlertTriangle, X, Globe, Phone } from 'lucide-react';
+import { Input, Button, Modal, Select } from '../components/UI';
+import { apiCall, uploadBrandLogo, IMG_URL } from '../api';
+import { formatPhoneNumber } from '../utils';
 
-// --- Менеджер Размерных Сеток и Ящиков ---
-const SizeGridManager = ({ settings, setSettings, apiCall, triggerToast }) => {
-    const [grids, setGrids] = useState(settings.sizeGrids || []);
-    const [boxTemplates, setBoxTemplates] = useState(settings.boxTemplates || {});
-    const [selectedGridId, setSelectedGridId] = useState(settings.defaultSizeGridId || (grids[0] ? grids[0].id : null));
-    
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newGridName, setNewGridName] = useState('');
-    const [newGridMin, setNewGridMin] = useState('');
-    const [newGridMax, setNewGridMax] = useState('');
-    
-    const [editingBoxGridId, setEditingBoxGridId] = useState(null);
-    const [editingBoxSize, setEditingBoxSize] = useState(null);
-    const [currentBoxConfig, setCurrentBoxConfig] = useState({});
-
-    // Обновляем локальные стейты при изменении глобальных настроек
-    useEffect(() => {
-        setGrids(settings.sizeGrids || []);
-        setBoxTemplates(settings.boxTemplates || {});
-        setSelectedGridId(settings.defaultSizeGridId || (settings.sizeGrids?.[0]?.id || null));
-    }, [settings]);
-
-    const currentGrid = grids.find(g => g.id === selectedGridId);
-    
-    const availableBoxSizes = [6, 8, 10, 12];
-    const currentGridTemplates = boxTemplates[selectedGridId] || {};
-
-    const handleSaveSettings = async (updates) => {
-        try {
-            const updatedSettings = { ...settings, ...updates };
-            const saved = await apiCall('/settings', 'POST', updatedSettings);
-            setSettings(saved.settings);
-            triggerToast("Настройки успешно сохранены");
-        } catch (e) {
-            triggerToast("Ошибка сохранения настроек", "error");
-        }
-    };
-    
-    // --- Логика Управления Сетками ---
-
-    const handleAddGrid = () => {
-        if (!newGridName || !newGridMin || !newGridMax) {
-            triggerToast("Заполните все поля", "error");
-            return;
-        }
-        if (parseInt(newGridMin) >= parseInt(newGridMax)) {
-             triggerToast("Мин. размер должен быть меньше макс. размера", "error");
-             return;
-        }
-        if (grids.length >= 5) {
-             triggerToast("Достигнут лимит (5) размерных сеток", "error");
-             return;
-        }
-        
-        const newId = grids.length > 0 ? Math.max(...grids.map(g => g.id)) + 1 : 1;
-        
-        const newGrid = {
-            id: newId,
-            name: newGridName,
-            min: newGridMin,
-            max: newGridMax,
-            isDefault: grids.length === 0
-        };
-        
-        const newGrids = [...grids, newGrid];
-        const newDefaultId = grids.length === 0 ? newId : settings.defaultSizeGridId;
-        
-        const newBoxTemplates = { ...boxTemplates, [newId]: {} };
-        setBoxTemplates(newBoxTemplates);
-        
-        handleSaveSettings({ 
-            sizeGrids: newGrids, 
-            defaultSizeGridId: newDefaultId,
-            boxTemplates: newBoxTemplates
-        });
-
-        setIsModalOpen(false);
-        setNewGridName('');
-        setNewGridMin('');
-        setNewGridMax('');
-        setSelectedGridId(newId);
-    };
-
-    const handleDeleteGrid = (idToDelete) => {
-        if (grids.length <= 1) {
-            triggerToast("Нельзя удалить последнюю размерную сетку", "error");
-            return;
-        }
-        
-        const newGrids = grids.filter(g => g.id !== idToDelete);
-        let newDefaultId = settings.defaultSizeGridId;
-        
-        if (idToDelete === newDefaultId) {
-            newDefaultId = newGrids[0].id;
-        }
-        
-        const newBoxTemplates = { ...boxTemplates };
-        delete newBoxTemplates[idToDelete];
-        setBoxTemplates(newBoxTemplates);
-
-        handleSaveSettings({ 
-            sizeGrids: newGrids, 
-            defaultSizeGridId: newDefaultId,
-            boxTemplates: newBoxTemplates
-        });
-    };
-
-    const handleSetDefault = (id) => {
-        if (id === settings.defaultSizeGridId) return;
-        const newGrids = grids.map(g => ({ ...g, isDefault: g.id === id }));
-        setGrids(newGrids);
-        handleSaveSettings({ 
-            sizeGrids: newGrids, 
-            defaultSizeGridId: id 
-        });
-    };
-
-    // --- Логика Редактирования Ящиков ---
-
-    const openBoxEditModal = (gridId, boxSize) => {
-        const grid = grids.find(g => g.id === gridId);
-        if (!grid) return;
-
-        setEditingBoxGridId(gridId);
-        setEditingBoxSize(boxSize);
-        
-        const template = boxTemplates[gridId]?.[boxSize] || {};
-        
-        const min = parseInt(grid.min);
-        const max = parseInt(grid.max);
-        let config = {};
-        for(let i = min; i <= max; i++) {
-            config[i] = template[i] || 0;
-        }
-        setCurrentBoxConfig(config);
-    };
-
-    const handleSaveBoxConfig = () => {
-        const totalQty = Object.values(currentBoxConfig).reduce((a, b) => a + b, 0);
-        
-        if (totalQty === 0) {
-            triggerToast("Ящик не может быть пустым", "error");
-            return;
-        }
-        if (totalQty !== editingBoxSize) {
-             triggerToast(`Сумма пар (${totalQty}) не совпадает с размером ящика (${editingBoxSize})`, "error");
-             return;
-        }
-
-        const newTemplates = { ...boxTemplates };
-        if (!newTemplates[editingBoxGridId]) newTemplates[editingBoxGridId] = {};
-        
-        const cleanConfig = Object.fromEntries(
-            Object.entries(currentBoxConfig).filter(([_, qty]) => qty > 0)
-        );
-
-        newTemplates[editingBoxGridId][editingBoxSize] = cleanConfig;
-        
-        setBoxTemplates(newTemplates);
-        handleSaveSettings({ boxTemplates: newTemplates });
-        setEditingBoxGridId(null);
-        setEditingBoxSize(null);
-    };
-    
-    // --- РЕНДЕР МОДАЛЬНОГО ОКНА РЕДАКТИРОВАНИЯ ЯЩИКА ---
-    if (editingBoxGridId !== null && currentGrid) {
-        const editingGrid = grids.find(g => g.id === editingBoxGridId);
-        const min = parseInt(editingGrid.min);
-        const max = parseInt(editingGrid.max);
-        const range = Array.from({ length: max - min + 1 }, (_, i) => String(min + i));
-        const totalQty = Object.values(currentBoxConfig).reduce((a, b) => a + b, 0);
-
-        return (
-            <div className="animate-fade-in space-y-6">
-                <h2 className="text-2xl font-bold text-gray-800">Редактирование комплектации ящика</h2>
-                <h3 className="text-xl text-blue-600">Сетка: {editingGrid.name} / Ящик: {editingBoxSize} пар</h3>
-                
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="mb-4">
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-2">Размеры ({min}-{max})</label>
-                        <div className="flex flex-wrap gap-2">
-                            {range.map(size => (
-                                <div key={size} className="flex flex-col items-center">
-                                    <span className="text-xs text-gray-500 font-medium mb-1">{size}</span>
-                                    <input 
-                                        type="number" 
-                                        inputMode="numeric" 
-                                        min="0"
-                                        className="w-12 h-12 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm text-lg font-bold text-gray-700" 
-                                        value={currentBoxConfig[size] || ''} 
-                                        onFocus={(e) => e.target.select()}
-                                        onChange={e => setCurrentBoxConfig(prev => ({ ...prev, [size]: parseInt(e.target.value) || 0 }))} 
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex justify-between items-center border-t pt-4 mt-4">
-                         <div className="font-bold text-lg">
-                             Всего пар в ящике: <span className="text-blue-600">{totalQty}</span>
-                         </div>
-                         <div className="flex gap-2">
-                             <Button onClick={() => { setEditingBoxGridId(null); setEditingBoxSize(null); }} variant="secondary">Отмена</Button>
-                             <Button onClick={handleSaveBoxConfig} disabled={totalQty === 0 || totalQty !== editingBoxSize} icon={Save} title={totalQty !== editingBoxSize ? `Сумма не равна ${editingBoxSize} парам` : 'Сохранить'}>
-                                 Сохранить
-                             </Button>
-                         </div>
-                    </div>
-                    {totalQty !== editingBoxSize && <p className="mt-3 text-red-500 text-sm">Сумма пар ({totalQty}) должна совпадать с размером ящика ({editingBoxSize}).</p>}
-                </div>
-            </div>
-        );
-    }
-    
-    // --- ОСНОВНОЙ РЕНДЕР МЕНЕДЖЕРА СЕТОК ---
-    return (
-        <div className="animate-fade-in space-y-8">
-            <h2 className="text-2xl font-bold text-gray-800">Размерные сетки и комплектация</h2>
-            
-            {/* 1. Управление сетками */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                <div className="flex justify-between items-center border-b pb-3 mb-3">
-                    <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2"><Ruler size={20}/> Размерные сетки (Макс. 5)</h3>
-                    <Button onClick={() => setIsModalOpen(true)} disabled={grids.length >= 5} icon={Plus}>Добавить сетку</Button>
-                </div>
-                
-                <div className="space-y-3">
-                    {grids.map(grid => (
-                        <div key={grid.id} className={`flex justify-between items-center p-3 rounded-lg border transition-colors ${grid.id === selectedGridId ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200'}`}>
-                            <div className="flex items-center gap-3">
-                                <button onClick={() => handleSetDefault(grid.id)} title="Сделать по умолчанию" className={`p-1 rounded transition-colors disabled:opacity-50`} disabled={grid.isDefault}>
-                                    {grid.isDefault ? <CheckSquare size={20} className="text-green-600"/> : <Square size={20} className="text-gray-400 hover:text-blue-500"/>}
-                                </button>
-                                <div onClick={() => setSelectedGridId(grid.id)} className="cursor-pointer">
-                                    <div className="font-bold text-gray-800">{grid.name} ({grid.min}-{grid.max})</div>
-                                    {grid.isDefault && <span className="text-xs text-green-600 font-medium">По умолчанию</span>}
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button onClick={() => setSelectedGridId(grid.id)} variant={grid.id === selectedGridId ? 'primary' : 'secondary'} size="sm">Выбрать</Button>
-                                <button onClick={() => handleDeleteGrid(grid.id)} disabled={grid.isDefault} className="p-2 text-red-400 hover:bg-red-100 rounded-lg disabled:opacity-30" title="Удалить"><Trash2 size={18}/></button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-            
-            {/* 2. Шаблоны ящиков */}
-            {currentGrid && (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                    <div className="border-b pb-3 mb-3">
-                        <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2"><Box size={20}/> Комплектация ящиков для сетки: <span className="text-blue-600">{currentGrid.name}</span></h3>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        {availableBoxSizes.map(size => {
-                            const template = currentGridTemplates[size];
-                            const isSet = template && Object.keys(template).length > 0;
-                            const totalQty = isSet ? Object.values(template).reduce((a,b)=>a+b,0) : 0;
-                            
-                            return (
-                                <div key={size} className={`p-4 rounded-xl border-2 ${isSet ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'} flex flex-col justify-between`}>
-                                    <div className="font-bold text-lg mb-2">Ящик {size} пар</div>
-                                    <div className="text-sm text-gray-600 mb-3 min-h-10">
-                                        {isSet ? (
-                                            <>
-                                                <span className="font-medium">Всего: {totalQty} пар</span>
-                                                <div className="text-xs mt-1 flex flex-wrap gap-x-2">
-                                                    {Object.entries(template).map(([s, q]) => <span key={s} className="font-mono text-gray-700">{s}({q})</span>)}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            'Комплектация не задана'
-                                        )}
-                                    </div>
-                                    <Button onClick={() => openBoxEditModal(selectedGridId, size)} icon={Edit} size="sm" variant={isSet ? 'secondary' : 'primary'}>
-                                        {isSet ? 'Редактировать' : 'Задать комплектацию'}
-                                    </Button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* Modal для добавления сетки */}
-            <Modal title="Добавить размерную сетку" isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} footer={<Button onClick={handleAddGrid} icon={Plus} disabled={!newGridName || !newGridMin || !newGridMax}>Создать</Button>}>
-                <div className="space-y-4">
-                    <Input label="Название сетки" value={newGridName} onChange={e => setNewGridName(e.target.value)} autoFocus placeholder="Женская / Детская / Основная"/>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Input label="Мин. размер" type="number" value={newGridMin} onChange={e => setNewGridMin(e.target.value)} placeholder="36"/>
-                        <Input label="Макс. размер" type="number" value={newGridMax} onChange={e => setNewGridMax(e.target.value)} placeholder="41"/>
-                    </div>
-                </div>
-            </Modal>
-        </div>
-    );
-};
-
-// --- Менеджер Валюты ---
-const CurrencyManager = ({ settings, setSettings, apiCall, triggerToast, highlightSetting, setHighlightSetting }) => {
-    const [rates, setRates] = useState(settings.exchangeRates || { usd: 0, eur: 0, isManual: false });
-    const [mainCurrency, setMainCurrency] = useState(settings.mainCurrency || 'USD');
-    const [loading, setLoading] = useState(false);
-    
-    useEffect(() => {
-        if (highlightSetting === 'rates') {
-            const timer = setTimeout(() => setHighlightSetting(null), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [highlightSetting, setHighlightSetting]);
-
-    const handleFetchRates = async () => {
-        if (rates.isManual) return;
-        setLoading(true);
-        try {
-            const data = await apiCall('/nbu-rates');
-            setRates(prev => ({ ...prev, usd: data.usd, eur: data.eur }));
-            triggerToast("Курсы НБУ загружены");
-        } catch (e) {
-            triggerToast("Ошибка загрузки курсов", "error");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (!settings.exchangeRates.isManual && settings.exchangeRates.usd === 0) {
-            handleFetchRates();
-        }
-    }, [settings.exchangeRates]);
-
-    const handleSave = async () => {
-        try {
-            const updatedSettings = { 
-                ...settings,
-                exchangeRates: rates,
-                mainCurrency: mainCurrency
-            };
-            const saved = await apiCall('/settings', 'POST', updatedSettings);
-            setSettings(saved.settings);
-            triggerToast("Настройки валют сохранены");
-        } catch (e) {
-            triggerToast("Ошибка сохранения", "error");
-        }
-    };
-
-    return (
-        <div id="rates" className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 ${highlightSetting === 'rates' ? 'ring-4 ring-blue-500/50' : ''}`}>
-            <div className="flex items-center gap-2 mb-4 text-gray-800 border-b pb-3">
-                <DollarSign size={20}/>
-                <h3 className="font-bold text-xl">Валюта и курсы</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Select label="Основная валюта" value={mainCurrency} onChange={e => setMainCurrency(e.target.value)}>
-                    <option value="USD">USD - Доллар США</option>
-                    <option value="EUR">EUR - Евро</option>
-                    <option value="UAH">UAH - Гривна</option>
-                </Select>
-                <div className="space-y-2 pt-2">
-                    <div className="flex items-center gap-2">
-                        <input type="checkbox" id="manualRates" checked={rates.isManual} onChange={e => setRates(prev => ({ ...prev, isManual: e.target.checked }))} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"/>
-                        <label htmlFor="manualRates" className="text-sm font-medium text-gray-700">Ручное управление курсами</label>
-                    </div>
-                    {!rates.isManual && (
-                        <Button onClick={handleFetchRates} disabled={loading} size="sm" className="w-full">
-                            {loading ? 'Загрузка...' : 'Загрузить курсы НБУ'}
-                        </Button>
-                    )}
-                </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4 border p-4 rounded-xl">
-                <Input label="USD (Курс к UAH)" type="number" value={rates.usd} onChange={e => setRates(prev => ({ ...prev, usd: e.target.value }))} disabled={!rates.isManual}/>
-                <Input label="EUR (Курс к UAH)" type="number" value={rates.eur} onChange={e => setRates(prev => ({ ...prev, eur: e.target.value }))} disabled={!rates.isManual}/>
-                <div className="flex flex-col justify-end pb-1">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Кросс-курс EUR</label>
-                    <div className="font-bold text-gray-800 text-lg">{(rates.usd && rates.eur) ? (rates.eur / rates.usd).toFixed(3) : 'N/A'}</div>
-                    <span className="text-xs text-gray-400">USD за EUR</span>
-                </div>
-            </div>
-
-            <Button onClick={handleSave} icon={Save} className="w-full">Сохранить настройки валют</Button>
-        </div>
-    );
-};
-
-// --- Менеджер Брендинга ---
-const BrandingManager = ({ settings, setSettings, apiCall, triggerToast }) => {
-    const [brandName, setBrandName] = useState(settings.brandName || 'SHOE EXPO');
-    const [brandPhones, setBrandPhones] = useState(settings.brandPhones || []);
-    const [newPhone, setNewPhone] = useState('');
-    const [logoFile, setLogoFile] = useState(null);
-
-    const handleSaveBranding = async () => {
-        try {
-            let logoFileName = settings.brandLogo;
-            if (logoFile) {
-                logoFileName = await uploadBrandLogo(logoFile, brandName);
-                setLogoFile(null);
-            }
-            
-            const updatedSettings = { 
-                ...settings,
-                brandName,
-                brandPhones,
-                brandLogo: logoFileName
-            };
-            const saved = await apiCall('/settings', 'POST', updatedSettings);
-            setSettings(saved.settings);
-            triggerToast("Настройки бренда сохранены");
-        } catch (e) {
-            triggerToast(e.message || "Ошибка сохранения бренда", "error");
-        }
-    };
-
-    const handleAddPhone = () => {
-        const cleanedPhone = newPhone.trim();
-        if (cleanedPhone && !brandPhones.includes(cleanedPhone)) {
-            setBrandPhones([...brandPhones, cleanedPhone]);
-            setNewPhone('');
-        }
-    };
-
-    const handleRemovePhone = (phoneToRemove) => {
-        setBrandPhones(brandPhones.filter(p => p !== phoneToRemove));
-    };
-
-    const handleLogoUpload = (e) => {
-        if (e.target.files.length) {
-            setLogoFile(e.target.files[0]);
-        }
-    };
-
-    return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-            <div className="flex items-center gap-2 mb-4 text-gray-800 border-b pb-3">
-                <Image size={20}/>
-                <h3 className="font-bold text-xl">Брендинг (Накладные)</h3>
-            </div>
-            
-            <Input label="Название бренда" value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="SHOE EXPO"/>
-
-            <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 block">Логотип</label>
-                <div className="flex items-center gap-4">
-                    {(settings.brandLogo || logoFile) ? (
-                        <div className="relative w-20 h-10 border rounded-lg flex items-center justify-center p-1 bg-gray-50">
-                            <img 
-                                src={logoFile ? URL.createObjectURL(logoFile) : `http://localhost:3001/images/${settings.brandLogo}`} 
-                                alt="Brand Logo" 
-                                className="h-full object-contain"
-                            />
-                        </div>
-                    ) : (
-                        <div className="w-20 h-10 border rounded-lg flex items-center justify-center bg-gray-100 text-xs text-gray-500">Нет лого</div>
-                    )}
-                    
-                    <label htmlFor="logo-upload" className="cursor-pointer">
-                        <input type="file" id="logo-upload" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                        <Button size="sm" variant="secondary" icon={Upload}>{logoFile ? 'Выбран файл' : 'Загрузить/Сменить'}</Button>
-                    </label>
-                </div>
-            </div>
-
-            <div className="space-y-2 pt-2">
-                <label className="text-sm font-medium text-gray-700 block">Телефоны (в шапке накладной)</label>
-                <div className="flex gap-2">
-                    <Input 
-                        icon={Phone}
-                        value={newPhone} 
-                        onChange={e => setNewPhone(e.target.value)} 
-                        placeholder="+380 99 123 45 67"
-                        className="flex-1"
-                    />
-                    <Button onClick={handleAddPhone} disabled={!newPhone} icon={Plus}>Добавить</Button>
-                </div>
-                {brandPhones.map(phone => (
-                    <div key={phone} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
-                        <span className="font-mono text-sm">{phone}</span>
-                        <button onClick={() => handleRemovePhone(phone)} className="text-red-400 hover:text-red-600" title="Удалить"><Trash2 size={16}/></button>
-                    </div>
-                ))}
-            </div>
-
-            <Button onClick={handleSaveBranding} icon={Save} className="w-full">Сохранить настройки бренда</Button>
-        </div>
-    );
-};
-
-
-// --- Основной компонент SettingsPage ---
 const SettingsPage = ({ apiCall, triggerToast, settings, setSettings, highlightSetting, setHighlightSetting }) => {
-    
-    const commonProps = { apiCall, triggerToast, settings, setSettings, highlightSetting, setHighlightSetting };
-    
-    return (
-        <div className="space-y-10">
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3"><Settings size={28}/> Настройки системы</h1>
-            
-            {/* Раздел 1: Сетки и Ящики */}
-            <SizeGridManager 
-                {...commonProps}
-            />
+  // --- STATE ---
+  const [activeBoxTab, setActiveBoxTab] = useState(null); 
+  
+  // Grids & Boxes
+  const [grids, setGrids] = useState(settings.sizeGrids || []);
+  const [activeGridId, setActiveGridId] = useState(settings.defaultSizeGridId || 1);
+  const [boxTemplates, setBoxTemplates] = useState(settings.boxTemplates || {});
+  
+  // Modals (Grids/Boxes)
+  const [isGridModalOpen, setIsGridModalOpen] = useState(false);
+  const [newGridData, setNewGridData] = useState({ name: '', min: '', max: '' });
+  
+  const [isDeleteGridModalOpen, setIsDeleteGridModalOpen] = useState(false);
+  const [gridToDelete, setGridToDelete] = useState(null);
 
-            {/* Раздел 2: Валюта и Курсы */}
-            <CurrencyManager
-                 {...commonProps}
-            />
+  const [isAddBoxModalOpen, setIsAddBoxModalOpen] = useState(false);
+  const [newBoxSize, setNewBoxSize] = useState('');
 
-            {/* Раздел 3: Брендинг */}
-            <BrandingManager
-                 {...commonProps}
-            />
-            
-        </div>
-    );
+  const [isDeleteBoxModalOpen, setIsDeleteBoxModalOpen] = useState(false);
+  const [boxToDelete, setBoxToDelete] = useState(null);
+
+  // Modals (Phones)
+  const [isDeletePhoneModalOpen, setIsDeletePhoneModalOpen] = useState(false);
+  const [phoneToDelete, setPhoneToDelete] = useState(null);
+
+  // Branding & Currency
+  const [rates, setRates] = useState(settings.exchangeRates || { usd: 0, eur: 0, isManual: false });
+  const [mainCurrency, setMainCurrency] = useState(settings.mainCurrency || 'USD');
+  const [brandName, setBrandName] = useState(settings.brandName || '');
+  const [phones, setPhones] = useState(settings.brandPhones || []);
+  const [newPhone, setNewPhone] = useState('');
+  
+  // Language (Dummy)
+  const [language, setLanguage] = useState('ru');
+
+  const fileInputRef = useRef(null);
+  const ratesRef = useRef(null);
+
+  // Sync with global settings
+  useEffect(() => {
+     setGrids(settings.sizeGrids || []);
+     setBoxTemplates(settings.boxTemplates || {});
+     setRates(settings.exchangeRates || {});
+     setMainCurrency(settings.mainCurrency || 'USD');
+     setBrandName(settings.brandName || '');
+     setPhones(settings.brandPhones || []);
+     
+     // Если активная сетка удалена, переключаемся на дефолтную
+     if (settings.sizeGrids && !settings.sizeGrids.find(g => g.id === activeGridId)) {
+         setActiveGridId(settings.defaultSizeGridId || (settings.sizeGrids[0]?.id));
+     }
+  }, [settings]);
+
+  // Подсветка курса при переходе
+  useEffect(() => {
+      if (highlightSetting === 'rates' && ratesRef.current) {
+          ratesRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          ratesRef.current.classList.add('ring-4', 'ring-green-400', 'bg-green-50', 'transition-all', 'duration-500');
+          setTimeout(() => {
+              ratesRef.current.classList.remove('ring-4', 'ring-green-400', 'bg-green-50');
+              setHighlightSetting(null);
+          }, 2500);
+      }
+  }, [highlightSetting, setHighlightSetting]);
+
+  // --- ACTIONS ---
+  const saveAll = async (updates) => {
+      const newSettings = { ...settings, ...updates };
+      setSettings(newSettings); // Оптимистичное обновление
+      try {
+          await apiCall('/settings', 'POST', newSettings);
+          triggerToast("Сохранено");
+      } catch(e) { triggerToast("Ошибка сохранения", "error"); }
+  };
+
+  // --- Currency Logic ---
+  const handleRateChange = (curr, val) => {
+      const newRates = { ...rates, [curr]: Number(val), isManual: true };
+      setRates(newRates);
+      if (val !== '') saveAll({ exchangeRates: newRates });
+  };
+  const fetchNBU = async () => {
+    try {
+        const res = await fetch(`http://localhost:3001/api/nbu-rates`);
+        const data = await res.json();
+        const newRates = { usd: Number(data.usd.toFixed(2)), eur: Number(data.eur.toFixed(2)), isManual: false };
+        setRates(newRates);
+        saveAll({ exchangeRates: newRates });
+        triggerToast("Курсы обновлены из НБУ");
+    } catch (e) { triggerToast("Ошибка получения курсов НБУ", "error"); }
+  };
+  const crossRate = (rates.usd > 0 && rates.eur > 0) ? (rates.eur / rates.usd).toFixed(3) : '-';
+
+  // --- Branding Logic ---
+  const handleLogoUpload = async (e) => {
+      if(!e.target.files[0]) return;
+      const f = await uploadBrandLogo(e.target.files[0], brandName);
+      saveAll({ brandLogo: f });
+  };
+  const addPhone = () => {
+      if(newPhone && phones.length < 3) {
+          const p = [...phones, newPhone];
+          setPhones(p); setNewPhone('');
+          saveAll({ brandPhones: p });
+      }
+  };
+  const confirmDeletePhone = (phone) => {
+      setPhoneToDelete(phone);
+      setIsDeletePhoneModalOpen(true);
+  };
+  const performDeletePhone = () => {
+      const n = phones.filter(p => p !== phoneToDelete);
+      setPhones(n);
+      saveAll({ brandPhones: n });
+      setIsDeletePhoneModalOpen(false);
+      setPhoneToDelete(null);
+      triggerToast("Номер удален");
+  };
+
+  // --- Grid Logic ---
+  const handleAddGrid = () => {
+      if(!newGridData.name || !newGridData.min || !newGridData.max) return;
+      if(grids.length >= 5) return triggerToast("Максимум 5 сеток", "error");
+
+      const newId = grids.length > 0 ? Math.max(...grids.map(g=>g.id || 0))+1 : 1;
+      const isFirst = grids.length === 0;
+      const newGrid = { id: newId, ...newGridData, isDefault: isFirst };
+      const newGrids = [...grids, newGrid];
+      const newTemplates = { ...boxTemplates, [newId]: {} };
+      
+      saveAll({ sizeGrids: newGrids, boxTemplates: newTemplates, defaultSizeGridId: isFirst ? newId : settings.defaultSizeGridId });
+      setNewGridData({ name: '', min: '', max: '' });
+      setIsGridModalOpen(false);
+      setActiveGridId(newId);
+  };
+
+  const confirmDeleteGrid = (id) => {
+      if(grids.length <= 1) return triggerToast("Нельзя удалить последнюю сетку", "error");
+      setGridToDelete(id);
+      setIsDeleteGridModalOpen(true);
+  };
+
+  const performDeleteGrid = () => {
+      const newGrids = grids.filter(g => g.id !== gridToDelete);
+      let newDef = settings.defaultSizeGridId;
+      if (gridToDelete === newDef) {
+          newDef = newGrids[0].id;
+          newGrids[0].isDefault = true;
+      }
+      if (gridToDelete === activeGridId) setActiveGridId(newDef);
+      
+      const newTemplates = { ...boxTemplates };
+      delete newTemplates[gridToDelete];
+
+      saveAll({ sizeGrids: newGrids, defaultSizeGridId: newDef, boxTemplates: newTemplates });
+      setIsDeleteGridModalOpen(false);
+      setGridToDelete(null);
+      triggerToast("Сетка удалена");
+  };
+
+  const handleSetDefault = (id, e) => {
+      e.stopPropagation();
+      const newGrids = grids.map(g => ({ ...g, isDefault: g.id === id }));
+      setGrids(newGrids);
+      saveAll({ sizeGrids: newGrids, defaultSizeGridId: id });
+  };
+
+  // --- Box Logic ---
+  const handleAddBox = () => {
+      if (!newBoxSize) return;
+      const sizeKey = String(newBoxSize);
+      
+      const currentTemplates = boxTemplates[activeGridId] || {};
+      if (Object.keys(currentTemplates).length >= 6) return triggerToast("Максимум 6 типов ящиков", "error");
+      if (currentTemplates[sizeKey]) return triggerToast("Такой ящик уже есть", "error");
+
+      const newTemplates = { ...boxTemplates };
+      if(!newTemplates[activeGridId]) newTemplates[activeGridId] = {};
+      newTemplates[activeGridId][sizeKey] = {}; 
+      
+      saveAll({ boxTemplates: newTemplates });
+      setBoxTemplates(newTemplates);
+      setActiveBoxTab(sizeKey);
+      setIsAddBoxModalOpen(false);
+      setNewBoxSize('');
+  };
+
+  const confirmDeleteBox = (boxSize) => {
+      setBoxToDelete(boxSize);
+      setIsDeleteBoxModalOpen(true);
+  };
+
+  const performDeleteBox = () => {
+      const newTemplates = { ...boxTemplates };
+      if (newTemplates[activeGridId]) {
+          delete newTemplates[activeGridId][boxToDelete];
+          saveAll({ boxTemplates: newTemplates });
+          setBoxTemplates(newTemplates);
+          if (activeBoxTab === boxToDelete) setActiveBoxTab(null);
+      }
+      setIsDeleteBoxModalOpen(false);
+      setBoxToDelete(null);
+      triggerToast("Ящик удален");
+  };
+
+  const handleUpdateBoxContent = (size, val) => {
+      if (!activeBoxTab) return;
+      const t = { ...boxTemplates };
+      if(!t[activeGridId]) t[activeGridId] = {};
+      if(!t[activeGridId][activeBoxTab]) t[activeGridId][activeBoxTab] = {};
+      
+      const numVal = Number(val);
+      if (numVal > 0) t[activeGridId][activeBoxTab][size] = numVal;
+      else delete t[activeGridId][activeBoxTab][size];
+      
+      saveAll({ boxTemplates: t });
+  };
+
+  // --- Helpers & Computed ---
+  const currentGrid = grids.find(g => g.id === parseInt(activeGridId)) || grids[0];
+  const sizeRange = currentGrid ? Array.from({ length: parseInt(currentGrid.max) - parseInt(currentGrid.min) + 1 }, (_, i) => parseInt(currentGrid.min) + i) : [];
+  
+  // Доступные ящики для ТЕКУЩЕЙ сетки
+  const availableBoxes = currentGrid ? Object.keys(boxTemplates[activeGridId] || {}).sort((a,b)=>Number(a)-Number(b)) : [];
+  
+  // Авто-выбор ящика при переключении сетки
+  useEffect(() => {
+      if (availableBoxes.length > 0) {
+          // Если текущего таба нет в новой сетке, выбираем первый доступный
+          if (!availableBoxes.includes(activeBoxTab)) {
+              setActiveBoxTab(availableBoxes[0]);
+          }
+      } else {
+          // Если ящиков нет, сбрасываем
+          setActiveBoxTab(null);
+      }
+  }, [activeGridId, boxTemplates]); 
+
+  const currentTotal = (currentGrid && activeBoxTab) ? Object.values(boxTemplates[activeGridId]?.[activeBoxTab] || {}).reduce((a,b)=>a+b,0) : 0;
+  const isBoxConfigValid = activeBoxTab && currentTotal === parseInt(activeBoxTab);
+
+  return (
+    <div className="space-y-8 animate-fade-in pb-20">
+       
+       {/* 1. ЗАГОЛОВОК И ВАЛЮТА */}
+       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+           <h2 className="text-3xl font-bold text-gray-800">Настройки</h2>
+           
+           <div className="flex gap-4 w-full md:w-auto">
+               <div className="bg-white px-4 py-3 rounded-2xl border flex items-center gap-3 shadow-sm flex-1 md:flex-none">
+                   <span className="font-bold text-gray-500 uppercase text-xs tracking-wide whitespace-nowrap">Основная валюта</span>
+                   <select className="font-bold text-blue-600 bg-transparent outline-none cursor-pointer text-lg" value={mainCurrency} onChange={e=>saveAll({mainCurrency:e.target.value})}>
+                       <option value="USD">USD</option><option value="EUR">EUR</option><option value="UAH">UAH</option>
+                   </select>
+               </div>
+               
+               <div ref={ratesRef} className="bg-white px-4 py-3 rounded-2xl border flex items-center gap-4 md:gap-6 shadow-sm flex-1 md:flex-none justify-between md:justify-start">
+                   <div className="flex items-center gap-2">
+                       <span className="font-bold text-gray-500">USD</span>
+                       <input className="w-16 md:w-20 border rounded-lg text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 outline-none p-1" type="number" value={rates.usd} onFocus={(e) => e.target.select()} onChange={e=>handleRateChange('usd', e.target.value)}/>
+                   </div>
+                   <div className="flex items-center gap-2">
+                       <span className="font-bold text-gray-500">EUR</span>
+                       <input className="w-16 md:w-20 border rounded-lg text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 outline-none p-1" type="number" value={rates.eur} onFocus={(e) => e.target.select()} onChange={e=>handleRateChange('eur', e.target.value)}/>
+                   </div>
+                   <div className="hidden md:flex flex-col text-xs text-gray-400 leading-tight border-l pl-3">
+                        <span>Кросс-курс</span>
+                        <span className="font-bold text-gray-700 text-sm">{crossRate}</span>
+                   </div>
+                   <button onClick={fetchNBU} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-2 rounded-lg transition-colors" title="Сбросить к НБУ"><RefreshCw size={18}/></button>
+               </div>
+           </div>
+       </div>
+
+       {/* 2. ЯЗЫК И БРЕНД (ВЕРХНИЙ БЛОК) */}
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+           {/* ЯЗЫК */}
+           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
+               <div className="flex items-center gap-3 border-b pb-4 mb-4">
+                   <Globe size={24} className="text-blue-600"/>
+                   <h3 className="font-bold text-xl text-gray-800">Язык интерфейса</h3>
+               </div>
+               <div className="space-y-2">
+                   {['ru', 'ua', 'en'].map(lang => (
+                       <button key={lang} onClick={()=>setLanguage(lang)} className={`w-full flex items-center justify-between p-3 rounded-xl border ${language===lang ? 'bg-blue-50 border-blue-500 text-blue-800' : 'border-gray-200 hover:bg-gray-50'}`}>
+                           <span className="font-bold">{lang === 'ru' ? 'Русский' : lang === 'ua' ? 'Українська' : 'English'}</span> {language===lang && <CheckSquare size={16}/>}
+                       </button>
+                   ))}
+               </div>
+           </div>
+
+           {/* БРЕНД */}
+           <div className="md:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-10 items-start">
+               <div className="flex-1 space-y-6 w-full">
+                   <div className="flex items-center gap-3 border-b pb-4"><Briefcase size={24} className="text-blue-600"/><h3 className="font-bold text-xl">Брендинг</h3></div>
+                   <Input label="Название бренда" value={brandName} onChange={e=>{setBrandName(e.target.value); saveAll({brandName:e.target.value})}} className="text-lg" />
+                   <div>
+                       <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Контактные телефоны</label>
+                       <div className="space-y-2">
+                           {phones.map((p,i)=>(
+                               <div key={i} className="flex justify-between items-center text-base bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium text-gray-700">
+                                   <span>{formatPhoneNumber(p)}</span> 
+                                   <button onClick={() => confirmDeletePhone(p)} className="text-gray-400 hover:text-red-500 bg-white p-1 rounded-lg border border-gray-200 shadow-sm transition-colors"><Trash2 size={18}/></button>
+                               </div>
+                           ))}
+                       </div>
+                       {phones.length < 3 && <div className="flex gap-2 mt-3"><Input value={newPhone} onChange={e=>setNewPhone(e.target.value)} placeholder="+380..." className="flex-1" /><Button onClick={addPhone} icon={Plus}>Добавить</Button></div>}
+                   </div>
+               </div>
+               
+               <div className="w-full md:w-64 flex flex-col items-center md:items-start">
+                   <label className="text-xs font-bold text-gray-500 uppercase mb-2 block w-full text-left">Логотип</label>
+                   <div className="w-full aspect-video border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 hover:border-blue-400 transition-all group" onClick={()=>fileInputRef.current.click()}>
+                       {settings.brandLogo ? <img src={`${IMG_URL}/${settings.brandLogo}`} className="h-24 object-contain mb-2" onError={(e)=>e.target.style.display='none'}/> : <ImageIcon size={40} className="text-gray-300 group-hover:text-blue-400 transition-colors mb-2"/>}
+                       <span className="text-sm text-gray-500 group-hover:text-blue-500 font-medium">Нажмите для загрузки</span>
+                       <input type="file" ref={fileInputRef} hidden onChange={handleLogoUpload}/>
+                   </div>
+               </div>
+           </div>
+       </div>
+
+       {/* 3. СЕТКИ И ЯЩИКИ (НИЖНИЙ БЛОК) */}
+       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+           
+           {/* Список сеток */}
+           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col h-full">
+               <div className="flex justify-between items-center mb-6">
+                   <h3 className="font-bold text-xl flex items-center gap-2 text-gray-800"><Ruler className="text-blue-600"/> Размерные сетки</h3>
+                   <button onClick={() => setIsGridModalOpen(true)} className="bg-blue-50 text-blue-600 p-2 rounded-xl hover:bg-blue-100 transition-colors" disabled={grids.length >= 5}><Plus size={20}/></button>
+               </div>
+               
+               <div className="space-y-3 flex-1">
+                   {grids.map(g => (
+                       <div 
+                           key={g.id} 
+                           onClick={() => setActiveGridId(g.id)} 
+                           className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative group ${activeGridId === g.id ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100 hover:border-blue-200'}`}
+                       >
+                           <div className="flex justify-between items-start">
+                               <div>
+                                   <div className="font-bold text-lg text-gray-800">{g.name}</div>
+                                   <div className="text-sm text-gray-500 font-medium mt-1 bg-white inline-block px-2 py-0.5 rounded border border-gray-200 shadow-sm">{g.min} — {g.max}</div>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                   {g.isDefault ? (
+                                       <span className="text-[10px] uppercase font-bold bg-green-100 text-green-700 px-2 py-1 rounded-md">По умолчанию</span>
+                                   ) : (
+                                       <button 
+                                           onClick={(e) => handleSetDefault(g.id, e)} 
+                                           className="opacity-0 group-hover:opacity-100 text-xs bg-gray-200 hover:bg-green-100 hover:text-green-700 px-2 py-1 rounded transition-all"
+                                       >
+                                           Сделать главной
+                                       </button>
+                                   )}
+                                   <button 
+                                       onClick={(e) => { e.stopPropagation(); confirmDeleteGrid(g.id); }} 
+                                       className="text-gray-300 hover:text-red-500 p-1 transition-colors"
+                                       disabled={grids.length <= 1}
+                                   >
+                                       <Trash2 size={18}/>
+                                   </button>
+                               </div>
+                           </div>
+                       </div>
+                   ))}
+               </div>
+           </div>
+
+           {/* Настройка ящиков */}
+           <div className="xl:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+               {currentGrid ? (
+                   <>
+                   <div className="flex justify-between items-center mb-8">
+                       <div>
+                           <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2"><Box className="text-blue-600"/> Комплектация ящиков</h3>
+                           <p className="text-gray-400 text-sm mt-1">Настройка для сетки: <b>{currentGrid.name}</b></p>
+                       </div>
+                       
+                       <div className="flex gap-2 p-1 bg-gray-100 rounded-xl overflow-x-auto">
+                           {availableBoxes.map(s => (
+                               <button 
+                                   key={s} 
+                                   onClick={()=>setActiveBoxTab(s)} 
+                                   className={`px-5 py-2 rounded-lg text-sm font-bold transition-all shadow-sm whitespace-nowrap ${activeBoxTab===s ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:text-gray-700'}`}
+                               >
+                                   {s}
+                               </button>
+                           ))}
+                           {availableBoxes.length < 6 && (
+                               <button onClick={() => setIsAddBoxModalOpen(true)} className="px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-200 transition-colors">
+                                   <Plus size={20}/>
+                               </button>
+                           )}
+                       </div>
+                   </div>
+                   
+                   {activeBoxTab ? (
+                       <div className="animate-fade-in">
+                           <div className="flex justify-between items-center mb-4">
+                               <div className={`text-lg font-bold flex items-center gap-2 ${isBoxConfigValid ? 'text-green-600' : 'text-orange-500'}`}>
+                                   {isBoxConfigValid ? <CheckSquare size={24}/> : <AlertTriangle size={24}/>}
+                                   Собрано пар: {currentTotal} из {activeBoxTab}
+                               </div>
+                               <button 
+                                   onClick={() => confirmDeleteBox(activeBoxTab)} 
+                                   className="text-red-400 hover:text-red-600 flex items-center gap-1 text-sm bg-red-50 px-3 py-2 rounded-lg transition-colors hover:bg-red-100"
+                               >
+                                   <Trash2 size={16}/> Удалить
+                               </button>
+                           </div>
+
+                           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
+                               {sizeRange.map(s => {
+                                   const val = boxTemplates[activeGridId]?.[activeBoxTab]?.[s] || 0;
+                                   return (
+                                       <div key={s} className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all ${val > 0 ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                                           <span className="text-gray-400 text-xs font-bold uppercase mb-1">Размер {s}</span>
+                                           <input 
+                                               type="number" 
+                                               min="0"
+                                               className={`w-10 h-10 text-center text-lg font-bold bg-white rounded-lg outline-none border transition-colors ${val > 0 ? 'border-blue-400 text-blue-700' : 'border-gray-200 text-gray-300 focus:border-blue-400 focus:text-gray-800'}`}
+                                               value={val || ''} 
+                                               onChange={e => handleUpdateBoxContent(s, e.target.value)} 
+                                               placeholder="0"
+                                               onFocus={(e) => e.target.select()}
+                                           />
+                                       </div>
+                                   )
+                               })}
+                           </div>
+                       </div>
+                   ) : (
+                       <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                           <div className="text-gray-400 mb-4"><Box size={48} className="mx-auto opacity-50"/></div>
+                           <p className="text-gray-500 font-medium">Выберите ящик сверху или создайте новый</p>
+                           <Button onClick={() => setIsAddBoxModalOpen(true)} icon={Plus} className="mt-4 mx-auto" variant="secondary">Создать тип ящика</Button>
+                       </div>
+                   )}
+                   </>
+               ) : <div className="text-center text-gray-400 py-10">Нет сеток</div>}
+           </div>
+       </div>
+
+       {/* MODALS */}
+       
+       {/* New Grid Modal */}
+       <Modal title="Новая размерная сетка" isOpen={isGridModalOpen} onClose={()=>setIsGridModalOpen(false)} footer={<Button onClick={handleAddGrid}>Создать</Button>}>
+           <div className="space-y-5">
+               <Input label="Название сетки" value={newGridData.name} onChange={e=>setNewGridData({...newGridData, name:e.target.value})} placeholder="Например: Подростковая" autoFocus/>
+               <div className="grid grid-cols-2 gap-4">
+                   <Input label="Минимальный размер" type="number" value={newGridData.min} onChange={e=>setNewGridData({...newGridData, min:e.target.value})} placeholder="36"/>
+                   <Input label="Максимальный размер" type="number" value={newGridData.max} onChange={e=>setNewGridData({...newGridData, max:e.target.value})} placeholder="41"/>
+               </div>
+           </div>
+       </Modal>
+
+       {/* Delete Grid Modal */}
+       <Modal title="Удалить сетку?" isOpen={isDeleteGridModalOpen} onClose={()=>setIsDeleteGridModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeleteGridModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeleteGrid}>Удалить</Button></>}>
+           <div className="text-center text-gray-600 py-4">Вы действительно хотите удалить эту сетку?<br/>Это действие нельзя отменить.</div>
+       </Modal>
+
+       {/* New Box Modal */}
+       <Modal title="Новый тип ящика" isOpen={isAddBoxModalOpen} onClose={()=>setIsAddBoxModalOpen(false)} footer={<Button onClick={handleAddBox}>Добавить</Button>}>
+           <div className="py-2">
+               <Input label="Количество пар в ящике" type="number" value={newBoxSize} onChange={e=>setNewBoxSize(e.target.value)} autoFocus placeholder="Например: 15"/>
+               <p className="text-xs text-gray-500 mt-2">После добавления вы сможете настроить состав размеров.</p>
+           </div>
+       </Modal>
+
+       {/* Delete Box Modal */}
+       <Modal title="Удалить ящик?" isOpen={isDeleteBoxModalOpen} onClose={()=>setIsDeleteBoxModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeleteBoxModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeleteBox}>Удалить</Button></>}>
+           <div className="text-center text-gray-600 py-4">Удалить тип ящика на <b>{boxToDelete}</b> пар?</div>
+       </Modal>
+
+       {/* Delete Phone Modal */}
+       <Modal title="Удалить номер?" isOpen={isDeletePhoneModalOpen} onClose={()=>setIsDeletePhoneModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeletePhoneModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeletePhone}>Удалить</Button></>}>
+            <div className="text-center text-gray-600 py-4">Удалить номер <b>{phoneToDelete}</b> из настроек?</div>
+       </Modal>
+
+    </div>
+  );
 };
 
 export default SettingsPage;

@@ -103,6 +103,7 @@ const DiscountModal = ({ isOpen, onClose, onApply, cart, mainCurrency }) => {
     );
 };
 
+// --- Основной компонент NewOrderPage ---
 const NewOrderPage = ({ 
     clients, setClients, models, sizeGrid, setOrders, orders, triggerToast, settings,
     orderDraft, setOrderDraft, clearOrderDraft, goToSettingsAndHighlight 
@@ -120,12 +121,55 @@ const NewOrderPage = ({
   const [showInvoice, setShowInvoice] = useState(false);
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
 
+  // Данные из черновика
   const { cart, clientPhone, clientName, clientCity, selectedClient, prepayment, paymentCurrency, lumpDiscount, id: editingId, orderId: displayOrderId } = orderDraft;
   const mainCurrency = settings?.mainCurrency || 'USD';
   
+  // Текущая модель (из списка)
   const currentM = models.find(m => m.id === parseInt(selModel) || m.id === selModel);
+  
+  // Данные из настроек
   const sizeGrids = settings?.sizeGrids || [];
   const boxTemplates = settings?.boxTemplates || {};
+
+  // --- ЛОГИКА РАЗМЕРНЫХ СЕТОК И ЯЩИКОВ ---
+  // Определяем активную сетку.
+  // 1. Если модель выбрана, берем её сетку.
+  // 2. Иначе (или если у модели нет сетки) берем дефолтную сетку из настроек.
+  const currentGrid = useMemo(() => {
+      let gridId = null;
+      
+      if (currentM) {
+          gridId = currentM.gridId;
+      }
+      
+      // Fallback на дефолтную сетку
+      if (!gridId) {
+          gridId = settings?.defaultSizeGridId;
+      }
+      
+      return sizeGrids.find(g => g.id === gridId) || sizeGrids[0] || null;
+  }, [currentM, sizeGrids, settings?.defaultSizeGridId]);
+  
+  // Генерируем массив размеров (например, 40, 41, 42...)
+  const sizeRange = useMemo(() => {
+    if (!currentGrid) return [];
+    const min = parseInt(currentGrid.min);
+    const max = parseInt(currentGrid.max);
+    if (isNaN(min) || isNaN(max) || min > max) return [];
+    return Array.from({ length: max - min + 1 }, (_, i) => String(min + i));
+  }, [currentGrid]);
+
+  // Получаем шаблоны ящиков для текущей сетки
+  const currentBoxTemplates = useMemo(() => {
+      if (!currentGrid) return {};
+      return boxTemplates[currentGrid.id] || {};
+  }, [currentGrid, boxTemplates]);
+
+  // Сортируем ключи ящиков (6, 8, 10...) для вывода кнопок
+  const availableBoxSizes = useMemo(() => {
+      return Object.keys(currentBoxTemplates).sort((a,b) => Number(a) - Number(b));
+  }, [currentBoxTemplates]);
 
   // --- РАСЧЕТЫ ---
   const subTotalUSD = cart.reduce((acc, i) => {
@@ -153,29 +197,7 @@ const NewOrderPage = ({
   const prepaymentInUSD = paymentRate > 0 ? Number(prepayment) / paymentRate : 0;
   const remainingTotalUSD = Math.max(0, totalCartUSD - prepaymentInUSD);
 
-  // --- ЛОГИКА РАЗМЕРНЫХ СЕТОК И ЯЩИКОВ ---
-  const currentGrid = useMemo(() => {
-      if (!currentM) {
-          const defaultId = settings?.defaultSizeGridId;
-          return sizeGrids.find(g => g.id === defaultId) || sizeGrids[0] || null;
-      }
-      return sizeGrids.find(g => g.id === currentM.gridId) || sizeGrids.find(g => g.id === settings?.defaultSizeGridId) || sizeGrids[0] || null;
-  }, [currentM, sizeGrids, settings?.defaultSizeGridId]);
-  
-  const sizeRange = useMemo(() => {
-    if (!currentGrid) return [];
-    const min = parseInt(currentGrid.min);
-    const max = parseInt(currentGrid.max);
-    if (isNaN(min) || isNaN(max) || min > max) return [];
-    return Array.from({ length: max - min + 1 }, (_, i) => String(min + i));
-  }, [currentGrid]);
-
-  const currentBoxTemplates = useMemo(() => {
-      if (!currentGrid) return {};
-      return boxTemplates[currentGrid?.id] || {};
-  }, [currentGrid, boxTemplates]);
-
-  // --- HANDLERS ---
+  // --- HANDLERS (Клиент, Дисконт) ---
   const updateDraft = (fields) => { setOrderDraft(prev => ({ ...prev, ...fields })); };
   
   const applyDiscount = (result) => {
@@ -185,11 +207,7 @@ const NewOrderPage = ({
           const discountInUSD = convertToUSD(result.value || 0, mainCurrency, settings?.exchangeRates);
           const newCart = cart.map((item, idx) => {
               if (result.indices.includes(idx)) {
-                  return { 
-                      ...item, 
-                      discountPerPair: discountInUSD, 
-                      total: (item.price - discountInUSD) * item.qty 
-                  };
+                  return { ...item, discountPerPair: discountInUSD, total: (item.price - discountInUSD) * item.qty };
               }
               return item;
           });
@@ -222,18 +240,19 @@ const NewOrderPage = ({
     setShowClientList(false);
   };
 
+  // --- HANDLERS (Товар и Корзина) ---
   const handleSizeChange = (size, val) => {
     const intVal = parseInt(val) || 0;
     setSizeQuantities(prev => ({ ...prev, [size]: intVal >= 0 ? intVal : 0 }));
   };
-  
+
   const addBox = (boxSize) => {
      const template = currentBoxTemplates[boxSize];
      if (!currentGrid) {
-         triggerToast(`Не выбрана размерная сетка для модели.`, "error"); return;
+         triggerToast(`Не выбрана размерная сетка.`, "error"); return;
      }
      if (!template || Object.keys(template).length === 0 || Object.values(template).reduce((a,b)=>a+b,0) === 0) {
-         triggerToast(`Комплектация для ящика ${boxSize} пар (сетка ${currentGrid?.name}) не задана.`, "error"); return;
+         triggerToast(`Комплектация для ящика ${boxSize} пар (сетка ${currentGrid.name}) не задана.`, "error"); return;
      }
      setSizeQuantities(prev => {
         const next = { ...prev };
@@ -242,17 +261,32 @@ const NewOrderPage = ({
      });
      triggerToast(`Добавлен ящик ${boxSize} пар`);
   };
-  
+
   const addToCart = () => {
     if (!currentM) return;
     const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
     if (totalQty === 0) { triggerToast("Укажите количество", 'error'); return; }
+    
+    // Форматирование: 40(2), 41(3)
     const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s}(${q})`);
     const note = noteParts.join(', ');
     
-    const gridId = currentM.gridId || settings?.defaultSizeGridId || null;
+    // Сохраняем ID сетки в товар
+    const gridId = currentGrid ? currentGrid.id : null;
 
-    updateDraft({ cart: [...cart, { ...currentM, modelId: currentM.id, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: 0, total: currentM.price * totalQty, gridId: gridId }] });
+    updateDraft({ 
+        cart: [...cart, { 
+            ...currentM, 
+            modelId: currentM.id, 
+            qty: totalQty, 
+            note, 
+            sizes: sizeQuantities, 
+            discountPerPair: 0, 
+            total: currentM.price * totalQty,
+            gridId: gridId
+        }] 
+    });
+    
     setSizeQuantities({}); setSelModel(''); setSearch(''); setShowModelList(false);
   };
   
@@ -263,16 +297,27 @@ const NewOrderPage = ({
       const discountInMain = convertPrice(itemToEdit.discountPerPair || 0, mainCurrency, settings.exchangeRates);
       setEditingDiscount(discountInMain === '0.00' ? '' : discountInMain);
   };
-  
+
   const saveEditedItem = () => {
       if (editingCartIndex === null) return;
       const item = cart[editingCartIndex];
       const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
       if (totalQty === 0) { triggerToast("Количество не может быть 0", "error"); return; }
+      
       const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s}(${q})`);
       const note = noteParts.join(', ');
+      
       const discountUSD = convertToUSD(parseFloat(editingDiscount) || 0, mainCurrency, settings.exchangeRates);
-      const updatedItem = { ...item, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: discountUSD, total: (item.price - discountUSD) * totalQty };
+      
+      const updatedItem = { 
+          ...item, 
+          qty: totalQty, 
+          note, 
+          sizes: sizeQuantities, 
+          discountPerPair: discountUSD, 
+          total: (item.price - discountUSD) * totalQty 
+      };
+      
       const newCart = [...cart];
       newCart[editingCartIndex] = updatedItem;
       updateDraft({ cart: newCart });
@@ -280,16 +325,17 @@ const NewOrderPage = ({
       setSizeQuantities({}); 
       setEditingDiscount('');
   };
-  
+
   const deleteFromCart = (index) => {
       const newCart = cart.filter((_, x) => x !== index);
       updateDraft({ cart: newCart });
       setConfirmDeleteIndex(null);
   }
-  
+
   const saveOrder = async () => {
     if (!clientPhone || !clientName) { triggerToast("Заполните данные клиента", 'error'); return; }
     if (cart.length === 0) { triggerToast("Корзина пуста", 'error'); return; }
+    
     let finalClientId = selectedClient?.id;
     if (!finalClientId) {
         try {
@@ -299,10 +345,12 @@ const NewOrderPage = ({
             finalClientId = savedClient.id;
         } catch (e) { triggerToast(`Ошибка клиента: ${e.message}`, 'error'); return; }
     }
+
     const orderData = { 
         date: new Date().toISOString(), clientId: parseInt(finalClientId), items: cart, total: totalCartUSD, lumpDiscount: lumpDiscountUSD,
         payment: { originalAmount: Number(prepayment), originalCurrency: paymentCurrency, rateAtMoment: paymentRate, prepaymentInUSD: prepaymentInUSD }
     };
+
     try {
       if (editingId) {
           const updated = await apiCall(`/orders/${editingId}`, 'PUT', orderData);
@@ -334,7 +382,7 @@ const NewOrderPage = ({
 
   const currentTotalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
   const currentTotalSumUSD = currentM ? currentM.price * currentTotalQty : 0;
-  
+
   // --- RENDER ---
   if (showInvoice) {
       const orderForPreview = {
@@ -424,7 +472,7 @@ const NewOrderPage = ({
               
               {!currentGrid ? (
                    <div className="text-center p-4 bg-yellow-50 text-yellow-700 rounded mb-4 border border-yellow-200 font-bold">
-                       ⚠ Размерная сетка не настроена или не найдена!
+                       ⚠ Размерная сетка не найдена или не выбрана!
                    </div>
               ) : (
                   <>
@@ -452,20 +500,28 @@ const NewOrderPage = ({
                           ))}
                       </div>
                   </div>
+                  
+                  {/* Динамические кнопки ящиков */}
                   <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-                     {[6, 8, 10, 12].map(boxSize => {
-                        const templateExists = currentBoxTemplates[boxSize] && Object.keys(currentBoxTemplates[boxSize]).length > 0;
+                     {availableBoxSizes.length > 0 ? availableBoxSizes.map(boxSize => {
+                        const template = currentBoxTemplates[boxSize];
+                        const total = Object.values(template || {}).reduce((a,b)=>a+b,0);
+                        if(total === 0) return null; // Не показываем пустые
+                        
                         return (
                             <button 
                                 key={boxSize} 
                                 onClick={() => addBox(boxSize)} 
-                                className="bg-white border border-blue-200 text-blue-700 py-2 rounded-lg text-xs font-bold hover:bg-blue-50 active:scale-95 transition-all shadow-sm flex justify-center items-center gap-1 disabled:opacity-50"
-                                disabled={!templateExists}
+                                className="bg-white border border-blue-200 text-blue-700 py-2 rounded-lg text-xs font-bold hover:bg-blue-50 active:scale-95 transition-all shadow-sm flex justify-center items-center gap-1"
                             >
-                                <Box size={14}/> {boxSize}-ти парный +1
+                                <Box size={14}/> Ящик {boxSize} пар
                             </button>
                         );
-                     })}
+                     }) : (
+                         <div className="col-span-4 text-center text-xs text-gray-400 p-2 border border-dashed rounded bg-gray-50">
+                             Нет настроенных ящиков для этой сетки ({currentGrid.name})
+                         </div>
+                     )}
                   </div>
                   </>
               )}
@@ -503,7 +559,7 @@ const NewOrderPage = ({
                 <div className="text-xs text-gray-500 mt-1">{i.qty} {getNoun(i.qty, 'пара', 'пары', 'пар')}
                    {i.note && <div className="mt-1 flex flex-wrap gap-1">{i.note.split(', ').map((n, ni) => (<span key={ni} className="bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px] font-bold text-gray-600 shadow-sm">{n}</span>))}</div>}
                 </div>
-                {i.discountPerPair > 0 && <div className="text-[10px] text-green-600 font-bold bg-green-50 inline-block px-1 rounded mt-1">Скидка: -{convertPrice(i.discountPerPair, mainCurrency, settings.exchangeRates)} {mainCurrency}/пара</div>}
+                {i.discountPerPair > 0 && <div className="text-[10px] text-green-600 font-bold bg-green-50 inline-block px-1 rounded mt-1">Скидка: -{convertPrice(i.discountPerPair, mainCurrency, settings.exchangeRates)} {mainCurrency}</div>}
               </div>
               <div className="text-right flex flex-col justify-between items-end">
                 <div className="font-bold text-gray-800">
@@ -527,7 +583,7 @@ const NewOrderPage = ({
              </div>
              <div className="flex gap-2 mb-2">
                  <div className="relative w-full">
-                    <Input 
+                    <input 
                         type="number" 
                         placeholder="Сумма предоплаты" 
                         value={prepayment}
@@ -636,8 +692,8 @@ const NewOrderPage = ({
                     </div>
                  </div>
                  <div className="grid grid-cols-2 gap-2">
-                    {[6, 8, 10, 12].map(boxSize => (
-                        <button key={boxSize} onClick={() => addBox(boxSize)} className="bg-white border border-blue-200 text-blue-700 py-2 rounded-lg text-xs font-bold hover:bg-blue-50 active:scale-95 transition-all shadow-sm flex justify-center items-center gap-1"><Box size={14}/> {boxSize}-ти парный +1</button>
+                    {availableBoxSizes.map(boxSize => (
+                        <button key={boxSize} onClick={() => addBox(boxSize)} className="bg-white border border-blue-200 text-blue-700 py-2 rounded-lg text-xs font-bold hover:bg-blue-50 active:scale-95 transition-all shadow-sm flex justify-center items-center gap-1"><Box size={14}/> Ящик {boxSize}</button>
                     ))}
                  </div>
             </div>

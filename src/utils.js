@@ -5,7 +5,9 @@ export const formatPhoneNumber = (value) => {
   const digits = String(value).replace(/\D/g, '');
   let clean = digits;
   if (digits.length === 10 && digits.startsWith('0')) clean = '38' + digits;
-  if (clean.length === 12 && clean.startsWith('380')) return `+${clean.slice(0, 3)} ${clean.slice(3, 5)} ${clean.slice(5, 8)} ${clean.slice(8, 10)} ${clean.slice(10, 12)}`;
+  if (clean.length === 12 && clean.startsWith('380')) {
+    return `+${clean.slice(0, 3)} ${clean.slice(3, 5)} ${clean.slice(5, 8)} ${clean.slice(8, 10)} ${clean.slice(10, 12)}`;
+  }
   return value; 
 };
 
@@ -18,17 +20,55 @@ export const getNoun = (number, one, two, five) => {
   return five;
 };
 
-export const convertPrice = (priceInUSD, currency, rates) => {
-  if (!currency || currency === 'USD') return Number(priceInUSD).toFixed(2);
-  const rate = rates?.[currency.toLowerCase()] || 1;
-  return (priceInUSD * rate).toFixed(2);
+// ИСПРАВЛЕННАЯ ФУНКЦИЯ КОНВЕРТАЦИИ
+// Принимает цену в БАЗОВОЙ валюте (обычно USD)
+export const convertPrice = (priceInBase, targetCurrency, rates) => {
+  const val = parseFloat(priceInBase);
+  if (isNaN(val)) return '0.00';
+
+  const currency = targetCurrency ? targetCurrency.toUpperCase() : 'USD';
+  
+  // Если курсов нет, возвращаем как есть
+  if (!rates) return val.toFixed(2);
+
+  const usdRate = Number(rates.usd) || 0;
+  const eurRate = Number(rates.eur) || 0;
+
+  // Логика: База данных хранит цены в USD.
+  // Мы конвертируем USD -> Target.
+  
+  if (currency === 'USD') {
+      return val.toFixed(2);
+  }
+  
+  if (currency === 'UAH') {
+      // USD -> UAH (умножаем на курс доллара)
+      return (val * usdRate).toFixed(2);
+  }
+  
+  if (currency === 'EUR') {
+      // USD -> EUR (через гривну: USD * KursUSD / KursEUR)
+      // Пример: 100$ * 41.5 / 43.5 = 95.4 EUR
+      if (eurRate === 0) return '0.00';
+      return ((val * usdRate) / eurRate).toFixed(2);
+  }
+
+  return val.toFixed(2);
 };
 
 export const convertToUSD = (amount, currency, rates) => {
-  if (!amount) return 0;
-  if (!currency || currency === 'USD') return Number(amount);
-  const rate = rates?.[currency.toLowerCase()] || 1;
-  return Number(amount) / rate;
+  const val = parseFloat(amount);
+  if (isNaN(val)) return 0;
+  
+  const code = currency ? currency.toUpperCase() : 'USD';
+  const usdRate = Number(rates?.usd) || 1;
+  const eurRate = Number(rates?.eur) || 1;
+
+  if (code === 'USD') return val;
+  if (code === 'UAH') return val / usdRate;
+  if (code === 'EUR') return (val * eurRate) / usdRate; // EUR -> UAH -> USD
+  
+  return val;
 };
 
 export const CURRENCY_CODES = { USD: 'USD', EUR: 'EUR', UAH: 'UAH' };
@@ -63,6 +103,10 @@ export async function exportSingleOrderXLSX(order, client, settings) {
         const rates = settings?.exchangeRates;
 
         const items = order.items || [];
+        // ВНИМАНИЕ: Мы используем convertPrice, чтобы в Excel попадали цены в выбранной валюте
+        // Но для правильного итога нужно сначала конвертировать, потом суммировать?
+        // Или суммировать в USD и конвертировать итог? Надежнее второе.
+        
         const grossTotalUSD = items.reduce((acc, item) => acc + (item.price * item.qty), 0);
         const totalPairDiscountUSD = items.reduce((acc, item) => acc + ((item.discountPerPair || 0) * item.qty), 0);
         const lumpDiscountUSD = parseFloat(order.lumpDiscount) || 0;
@@ -86,7 +130,7 @@ export async function exportSingleOrderXLSX(order, client, settings) {
             [client.city, "", "", "", "Всего пар:", items.reduce((a,b)=>a+b.qty,0)],
             [client.phone],
             [],
-            ["Модель / Цвет", "Размеры", "Кол-во", "Цена", "Сумма"],
+            [`Модель / Цвет`, `Размеры`, `Кол-во`, `Цена (${mainCurrency})`, `Сумма (${mainCurrency})`],
         ];
 
         items.forEach(item => {

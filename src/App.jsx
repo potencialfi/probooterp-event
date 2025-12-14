@@ -20,13 +20,16 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
+  
   const [clients, setClients] = useState([]);
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [sizeGrid, setSizeGrid] = useState({ min: '', max: '' });
+  
+  // Начальные настройки
   const [settings, setSettings] = useState({ 
-      sizeGrid: { min: '', max: '' }, 
-      boxTemplates: { 6:{}, 8:{}, 10:{}, 12:{} }, 
+      sizeGrids: [], 
+      defaultSizeGridId: null,
+      boxTemplates: {}, 
       exchangeRates: { usd: 0, eur: 0, isManual: false },
       mainCurrency: 'USD',
       brandName: 'SHOE EXPO',
@@ -45,8 +48,8 @@ export default function App() {
       lumpDiscount: ''
   };
   const [orderDraft, setOrderDraft] = useState(initialOrderState);
-  const [highlightSetting, setHighlightSetting] = useState(null);
   
+  const [highlightSetting, setHighlightSetting] = useState(null);
   const [toast, setToast] = useState(null); 
   const [importResult, setImportResult] = useState(null);
 
@@ -56,17 +59,22 @@ export default function App() {
           setClients(data.clients || []); 
           setModels(data.models || []); 
           setOrders(data.orders || []); 
+          
           if(data.settings) {
-             if(data.settings.sizeGrid) setSizeGrid(data.settings.sizeGrid);
              setSettings(prev => ({ ...prev, ...data.settings }));
              
-             // Инициализация валюты для нового заказа
-             setOrderDraft(prev => ({
-                 ...prev,
-                 paymentCurrency: prev.paymentCurrency || data.settings.mainCurrency || 'USD'
-             }));
+             setOrderDraft(prev => {
+                 // Если мы не в режиме редактирования (нет id), обновляем валюту
+                 if (!prev.id) {
+                     return {
+                         ...prev,
+                         paymentCurrency: prev.paymentCurrency || data.settings.mainCurrency || 'USD'
+                     };
+                 }
+                 return prev;
+             });
           }
-      } catch (e) { triggerToast('Ошибка подключения', 'error'); } 
+      } catch (e) { triggerToast('Ошибка подключения к серверу', 'error'); } 
   };
 
   useEffect(() => {
@@ -75,24 +83,24 @@ export default function App() {
     }
   }, [user]);
   
-  const triggerToast = (msg, type = 'success') => setToast({ message: msg, type });
+  const triggerToast = (msg, type = 'success') => {
+      setToast({ message: msg, type });
+      setTimeout(() => setToast(null), 3000);
+  };
   
   const clearOrderDraft = () => {
       setOrderDraft({
           ...initialOrderState,
           paymentCurrency: settings.mainCurrency || 'USD'
       });
-      triggerToast("Форма заказа очищена");
   };
 
-  // ФУНКЦИЯ РЕДАКТИРОВАНИЯ ЗАКАЗА
   const handleEditOrder = (order) => {
-      // Находим клиента, чтобы заполнить поля
       const client = clients.find(c => c.id === order.clientId);
       
       setOrderDraft({
-          id: order.id, // Важно! Это флаг того, что мы редактируем
-          orderId: order.orderId, // Номер для отображения
+          id: order.id, 
+          orderId: order.orderId, 
           cart: order.items,
           clientPhone: client ? client.phone : '',
           clientName: client ? client.name : '',
@@ -104,7 +112,6 @@ export default function App() {
       });
       
       setActiveTab('newOrder');
-      triggerToast(`Редактирование заказа №${order.orderId || ''}`);
   };
 
   const goToSettingsAndHighlight = (section) => {
@@ -125,10 +132,10 @@ export default function App() {
           const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); 
           const res = await apiCall(endpoint, 'POST', data); 
           if(cb) cb(res); else { loadAllData(); setImportResult(res); } 
-        } catch (err) { triggerToast("Ошибка файла", 'error'); } 
+        } catch (err) { triggerToast("Ошибка структуры файла", 'error'); } 
       }; 
       reader.readAsBinaryString(file); 
-    } catch (err) { triggerToast("Ошибка Excel", 'error'); } 
+    } catch (err) { triggerToast("Ошибка чтения Excel", 'error'); } 
   };
 
   const handleLoginSuccess = (userData) => {
@@ -154,7 +161,7 @@ export default function App() {
                 clients={clients} 
                 setClients={setClients} 
                 models={models} 
-                sizeGrid={sizeGrid} 
+                sizeGrid={settings.sizeGrids} 
                 setOrders={setOrders} 
                 orders={orders} 
                 triggerToast={triggerToast} 
@@ -172,15 +179,26 @@ export default function App() {
         {activeTab === 'history' && (
             <OrdersPage 
                 orders={orders} 
-                setOrders={setOrders} // Передаем сеттер для удаления
+                setOrders={setOrders} 
                 clients={clients} 
                 settings={settings} 
                 triggerToast={triggerToast}
-                onEdit={handleEditOrder} // Передаем функцию редактирования
+                onEdit={handleEditOrder}
             />
         )}
         
-        {activeTab === 'settings' && <SettingsPage sizeGrid={sizeGrid} setSizeGrid={setSizeGrid} apiCall={apiCall} triggerToast={triggerToast} settings={settings} setSettings={setSettings} highlightSetting={highlightSetting} setHighlightSetting={setHighlightSetting}/>}
+        {/* ИСПРАВЛЕНО: Передаем loadAllData */}
+        {activeTab === 'settings' && (
+            <SettingsPage 
+                apiCall={apiCall} 
+                triggerToast={triggerToast} 
+                settings={settings} 
+                setSettings={setSettings} 
+                highlightSetting={highlightSetting} 
+                setHighlightSetting={setHighlightSetting}
+                loadAllData={loadAllData} // <<-- ВОТ ЭТО ВАЖНО
+            />
+        )}
         
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         <ImportResultModal result={importResult} onClose={() => setImportResult(null)} />

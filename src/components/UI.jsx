@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Check } from 'lucide-react';
+import { X, Check, AlertCircle } from 'lucide-react';
 
 export const Button = ({ children, onClick, variant = 'primary', size = 'md', icon: Icon, className = '', disabled = false, ...props }) => {
   const baseStyle = "flex items-center justify-center gap-2 font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -44,7 +44,6 @@ export const Input = ({ label, icon: Icon, className = '', ...props }) => (
   </div>
 );
 
-// ДОБАВЛЕН КОМПОНЕНТ SELECT
 export const Select = ({ label, value, onChange, children, className = '', ...props }) => (
   <div className={className}>
     {label && <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 ml-1">{label}</label>}
@@ -80,11 +79,18 @@ export const Modal = ({ title, children, onClose, footer, isOpen = true }) => {
     );
 };
 
+// ОБНОВЛЕННЫЙ TOAST: Белый, сверху по центру
 export const Toast = ({ message, type = 'success', onClose }) => (
-    <div className={`fixed bottom-6 right-6 z-[60] flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl animate-slide-up text-white font-medium ${type === 'error' ? 'bg-red-500' : 'bg-gray-800'}`}>
-        {type === 'success' ? <Check size={20} className="text-green-400"/> : <X size={20}/>}
-        <span>{message}</span>
-        <button onClick={onClose} className="ml-2 opacity-70 hover:opacity-100"><X size={16}/></button>
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-3 rounded-xl shadow-xl animate-slide-down bg-white border border-gray-100 min-w-[300px]">
+        {type === 'success' ? (
+            <div className="bg-green-100 p-1 rounded-full text-green-600"><Check size={18}/></div>
+        ) : (
+            <div className="bg-red-100 p-1 rounded-full text-red-600"><AlertCircle size={18}/></div>
+        )}
+        <span className={`font-medium ${type === 'error' ? 'text-red-600' : 'text-gray-800'}`}>
+            {message}
+        </span>
+        <button onClick={onClose} className="ml-auto text-gray-400 hover:text-gray-600"><X size={16}/></button>
     </div>
 );
 
