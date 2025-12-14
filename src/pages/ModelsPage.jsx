@@ -1,124 +1,208 @@
-import React, { useState } from 'react';
-import { Search, Upload, Download, Plus, Edit, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, Edit, Trash2, Search, Download, Upload, DollarSign, Box } from 'lucide-react';
+import { Button, Input, Modal, Select } from '../components/UI';
 import { apiCall } from '../api';
-import { handleExportExcel, convertPrice } from '../utils';
-import { Button, Input, Modal } from '../components/UI';
+import { convertPrice, handleExportExcel, convertToUSD } from '../utils';
+
+const initialModel = { sku: '', color: '', price: '', gridId: null };
 
 const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAllData, setImportResult, settings }) => {
-  const [newModel, setNewModel] = useState({ sku: '', color: '', price: '' });
-  const [errors, setErrors] = useState({});
-  const [delId, setDelId] = useState(null);
-  const [editM, setEditM] = useState(null);
-  const [skuFilter, setSkuFilter] = useState('');
-
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentModel, setCurrentModel] = useState(initialModel);
+  const [search, setSearch] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  
   const mainCurrency = settings?.mainCurrency || 'USD';
+  const sizeGrids = settings?.sizeGrids || [];
+  const defaultGridId = settings?.defaultSizeGridId || (sizeGrids[0]?.id || null);
 
-  const validate = () => {
-    const errs = {};
-    if (!newModel.sku.trim()) errs.sku = "Введите артикул";
-    if (!newModel.color.trim()) errs.color = "Укажите цвет";
-    if (!newModel.price) errs.price = "Укажите цену";
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
+  // Установка дефолтной сетки при открытии модалки
+  const handleOpenModal = (model = initialModel) => {
+      setCurrentModel({
+          ...model,
+          gridId: model.gridId || defaultGridId // Используем gridId модели или дефолтный
+      });
+      setIsModalOpen(true);
   };
-
-  const addModel = async () => {
-    if (!validate()) return;
-    if (models.some(m => m.sku === newModel.sku && m.color === newModel.color)) {
-       triggerToast("Такая модель уже существует", 'error');
-       return;
+  
+  const handleSaveModel = async () => {
+    if (!currentModel.sku || !currentModel.color || !currentModel.price || !currentModel.gridId) {
+      triggerToast("Заполните все поля", 'error');
+      return;
     }
+    const priceUSD = convertToUSD(parseFloat(currentModel.price) || 0, mainCurrency, settings.exchangeRates);
+    
     try {
-      const saved = await apiCall('/models', 'POST', newModel);
-      setModels([...models, saved]);
-      setNewModel({ sku: '', color: '', price: '' });
-      setErrors({});
-      triggerToast("Модель успешно сохранена");
-    } catch(e) { triggerToast(e.message, 'error'); }
+      if (currentModel.id) {
+        // Редактирование
+        const updated = await apiCall(`/models/${currentModel.id}`, 'PUT', { 
+            ...currentModel, 
+            price: priceUSD,
+            gridId: currentModel.gridId
+        });
+        setModels(models.map(m => m.id === updated.id ? updated : m));
+        triggerToast("Модель обновлена");
+      } else {
+        // Создание
+        const newModel = await apiCall('/models', 'POST', { 
+            ...currentModel, 
+            price: priceUSD,
+            gridId: currentModel.gridId
+        });
+        setModels([newModel, ...models]);
+        triggerToast("Модель добавлена");
+      }
+      setIsModalOpen(false);
+      setCurrentModel(initialModel);
+    } catch(e) {
+      triggerToast(e.message || "Ошибка сохранения", 'error');
+    }
   };
 
-  const removeModel = async () => {
-    try {
-      await apiCall(`/models/${delId}`, 'DELETE');
-      setModels(models.filter(m => m.id !== delId));
-      setDelId(null);
-      triggerToast("Модель удалена", 'success');
-    } catch(e) { triggerToast("Ошибка удаления", 'error'); }
+  const handleDeleteModel = async () => {
+      try {
+          await apiCall(`/models/${confirmDeleteId}`, 'DELETE');
+          setModels(models.filter(m => m.id !== confirmDeleteId));
+          setConfirmDeleteId(null);
+          triggerToast("Модель удалена");
+      } catch (e) {
+          triggerToast("Ошибка удаления", 'error');
+      }
+  };
+  
+  const filteredModels = useMemo(() => {
+    const s = search.toLowerCase();
+    return models.filter(m => 
+      m.sku.toLowerCase().includes(s) || 
+      m.color.toLowerCase().includes(s) ||
+      (sizeGrids.find(g => g.id === m.gridId)?.name || '').toLowerCase().includes(s)
+    );
+  }, [models, search, sizeGrids]);
+  
+  const handleExport = () => {
+      const data = filteredModels.map(m => ({
+          Артикул: m.sku,
+          Цвет: m.color,
+          Цена: convertPrice(m.price, mainCurrency, settings.exchangeRates),
+          'Сетка ID': m.gridId,
+          'Название сетки': sizeGrids.find(g => g.id === m.gridId)?.name || 'Неизвестно'
+      }));
+      handleExportExcel(data, 'models_export');
   };
 
-  const saveEdit = async () => {
-    try {
-      const updated = await apiCall(`/models/${editM.id}`, 'PUT', { price: Number(editM.price) });
-      setModels(models.map(m => m.id === editM.id ? updated : m));
-      setEditM(null);
-      triggerToast("Цена обновлена");
-    } catch(e) { triggerToast("Ошибка сохранения", 'error'); }
-  };
-
-  const filtered = models.filter(m => m.sku.toLowerCase().includes(skuFilter.toLowerCase()));
+  // Получение имени сетки по ID
+  const getGridName = (id) => sizeGrids.find(g => g.id === id)?.name || 'Неизвестно';
+  
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Модели</h2>
+      <div className="flex justify-between items-center border-b pb-4 mb-4">
+        <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Модели обуви ({models.length})</h2>
         <div className="flex gap-2">
-          <label className="cursor-pointer bg-white border border-gray-300 px-4 py-2 rounded-xl flex gap-2 hover:bg-gray-50 text-sm transition-all text-gray-700 font-medium shadow-sm active:scale-95 items-center">
-            <Upload size={16}/> Импорт
-            <input type="file" hidden onChange={(e) => handleFileImport(e, '/models/import', (res) => { loadAllData(); setImportResult(res); })} accept=".xlsx,.xls"/>
-          </label>
-          <Button onClick={() => handleExportExcel(models, 'models')} variant="secondary" icon={Download}>Экспорт</Button>
+            <Button onClick={() => handleExport()} variant="secondary" icon={Download}>Экспорт</Button>
+            <label htmlFor="import-models">
+                <input type="file" id="import-models" accept=".xlsx" onChange={handleFileImport} className="hidden" />
+                <Button variant="secondary" icon={Upload}>Импорт</Button>
+            </label>
+            <Button onClick={() => handleOpenModal()} icon={Plus}>Добавить</Button>
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 grid grid-cols-1 md:grid-cols-4 gap-6 items-start relative overflow-hidden">
-        <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500"></div>
-        <Input label="Артикул" placeholder="ART-1" value={newModel.sku} onChange={e => {setNewModel({...newModel, sku: e.target.value}); setErrors({...errors, sku: ''})}} error={errors.sku} />
-        <Input label="Цвет" placeholder="Чорний" value={newModel.color} onChange={e => {setNewModel({...newModel, color: e.target.value}); setErrors({...errors, color: ''})}} error={errors.color} />
-        <Input label="Цена (USD)" placeholder="10" type="number" value={newModel.price} onChange={e => {setNewModel({...newModel, price: e.target.value}); setErrors({...errors, price: ''})}} error={errors.price} />
-        <div className="pt-6">
-           <Button onClick={addModel} size="md" icon={Plus} className="w-full h-[46px]">Добавить</Button>
-        </div>
+      <div className="relative w-full">
+        <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+        <input 
+            className="w-full border border-gray-300 p-3 pl-12 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-gray-400 shadow-sm"
+            placeholder="Поиск по артикулу, цвету или сетке..." 
+            value={search} 
+            onChange={e => setSearch(e.target.value)} 
+        />
       </div>
 
-      <div className="space-y-4">
-        <div className="relative">
-          <Search className="absolute left-4 top-3.5 text-gray-400" size={20}/>
-          <input 
-            placeholder="Поиск по артикулу..." 
-            className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
-            value={skuFilter} 
-            onChange={e => setSkuFilter(e.target.value)}
-          />
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider"><tr><th className="p-4 font-semibold">Артикул</th><th className="p-4 font-semibold">Цвет</th><th className="p-4 text-right font-semibold">Цена</th><th className="p-4 text-center font-semibold">Действия</th></tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map(m => {
-                // Конвертируем цену
-                const displayPrice = convertPrice(m.price, mainCurrency, settings.exchangeRates);
-                return (
-                <tr key={m.id} className="hover:bg-gray-50/80 transition-colors group">
-                  <td className="p-4 font-mono font-bold text-gray-700">{m.sku}</td>
-                  <td className="p-4 text-gray-600">{m.color}</td>
-                  <td className="p-4 text-right font-bold text-green-600">{displayPrice} {mainCurrency}</td>
-                  <td className="p-4 flex justify-center gap-2">
-                    <button onClick={() => setEditM({...m})} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors"><Edit size={18}/></button>
-                    <button onClick={() => setDelId(m.id)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"><Trash2 size={18}/></button>
-                  </td>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+        <table className="w-full text-left">
+            <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                <tr>
+                    <th className="p-4">Артикул</th>
+                    <th className="p-4">Цвет</th>
+                    <th className="p-4">Цена ({mainCurrency})</th>
+                    <th className="p-4">Сетка</th>
+                    <th className="p-4 text-right">Действия</th>
                 </tr>
-              )})}
-               {filtered.length === 0 && <tr><td colSpan="4" className="p-12 text-center text-gray-400">Модели не найдены</td></tr>}
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+            {filteredModels.map(m => (
+                <tr key={m.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="p-4 font-bold text-gray-800">{m.sku}</td>
+                    <td className="p-4 text-gray-600">{m.color}</td>
+                    <td className="p-4 font-mono text-green-600 font-bold">{convertPrice(m.price, mainCurrency, settings.exchangeRates)}</td>
+                    <td className="p-4 text-sm text-blue-600 font-medium">{getGridName(m.gridId)}</td>
+                    <td className="p-4 text-right">
+                         <div className="flex justify-end gap-1">
+                            <button onClick={() => handleOpenModal(m)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors" title="Редактировать"><Edit size={18}/></button>
+                            <button onClick={() => setConfirmDeleteId(m.id)} className="p-2 text-gray-400 hover:bg-red-100 hover:text-red-500 rounded-lg transition-colors" title="Удалить"><Trash2 size={18}/></button>
+                         </div>
+                    </td>
+                </tr>
+            ))}
             </tbody>
-          </table>
-          </div>
+        </table>
         </div>
       </div>
-      
-      {delId && <Modal title="Удаление модели" onClose={() => setDelId(null)} footer={<><Button variant="secondary" onClick={() => setDelId(null)}>Отмена</Button><Button variant="danger" onClick={removeModel}>Удалить</Button></>}><p>Вы действительно хотите удалить эту модель?</p></Modal>}
-      {editM && <Modal title={`${editM.sku} — ${editM.color}`} onClose={() => setEditM(null)} footer={<Button onClick={saveEdit}>Сохранить</Button>}><Input label="Новая цена (USD)" type="number" value={editM.price} onChange={e => setEditM({...editM, price: e.target.value})} autoFocus /></Modal>}
+
+      {/* Modal Add/Edit Model */}
+      <Modal 
+        title={currentModel.id ? 'Редактировать модель' : 'Добавить новую модель'} 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        footer={<Button onClick={handleSaveModel} icon={Save}>Сохранить</Button>}
+      >
+        <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+                <Input label="Артикул" value={currentModel.sku} onChange={e => setCurrentModel({...currentModel, sku: e.target.value})} autoFocus/>
+                <Input label="Цвет" value={currentModel.color} onChange={e => setCurrentModel({...currentModel, color: e.target.value})}/>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <Input 
+                    label={`Цена (${mainCurrency})`} 
+                    icon={DollarSign}
+                    type="number" 
+                    value={currentModel.price} 
+                    onChange={e => setCurrentModel({...currentModel, price: e.target.value})}
+                />
+                
+                {/* Выбор размерной сетки */}
+                <Select
+                    label="Размерная сетка"
+                    value={currentModel.gridId || ''}
+                    onChange={e => setCurrentModel({...currentModel, gridId: parseInt(e.target.value)})}
+                >
+                    <option value="" disabled>Выберите сетку</option>
+                    {sizeGrids.map(g => (
+                        <option key={g.id} value={g.id}>
+                            {g.name} ({g.min}-{g.max}) {g.isDefault && '(По умолчанию)'}
+                        </option>
+                    ))}
+                </Select>
+            </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteId && (
+        <Modal 
+          title="Подтвердите удаление" 
+          onClose={() => setConfirmDeleteId(null)} 
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Отмена</Button>
+              <Button variant="danger" onClick={handleDeleteModel}>Удалить</Button>
+            </>
+          }
+        >
+          <p className="text-center text-gray-600">Вы действительно хотите удалить эту модель?</p>
+        </Modal>
+      )}
     </div>
   );
 };

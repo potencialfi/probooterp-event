@@ -67,47 +67,25 @@ export async function handleExportExcel(data, filename) {
 export async function exportSingleOrderXLSX(order, client) {
     try {
         const XLSX = await ensureXLSX();
-        
         const rows = [
             ["НАКЛАДНАЯ", `Заказ №${order.orderId || order.id}`],
             ["Дата", new Date(order.date).toLocaleDateString()],
-            [],
-            ["КЛИЕНТ"],
-            ["Имя", client.name],
-            ["Город", client.city],
-            ["Телефон", client.phone],
-            [],
-            ["ТОВАРЫ"],
-            ["Артикул", "Цвет", "Размеры", "Кол-во", "Цена (USD)", "Сумма (USD)"],
+            [], ["КЛИЕНТ"], ["Имя", client.name], ["Город", client.city], ["Телефон", client.phone],
+            [], ["ТОВАРЫ"], ["Артикул", "Цвет", "Размеры", "Кол-во", "Цена (USD)", "Сумма (USD)"],
         ];
-
         order.items.forEach(item => {
-            const sizesStr = item.sizes ? 
-                Object.entries(item.sizes).filter(([_, q]) => q > 0).map(([s, q]) => `${s}(${q})`).join(', ') : item.note;
-
-            rows.push([
-                item.sku, 
-                item.color, 
-                sizesStr, 
-                item.qty, 
-                item.price, 
-                item.total
-            ]);
+            const sizesStr = item.sizes ? Object.entries(item.sizes).filter(([_, q]) => q > 0).map(([s, q]) => `${s}(${q})`).join(', ') : item.note;
+            rows.push([item.sku, item.color, sizesStr, item.qty, item.price, item.total]);
         });
-
         rows.push([]);
         rows.push(["ИТОГО", "", "", order.items.reduce((a,b)=>a+b.qty,0), "", order.total]);
-        
         if (order.payment && order.payment.originalAmount) {
              rows.push(["ОПЛАЧЕНО", "", "", "", "", `${order.payment.originalAmount} ${order.payment.originalCurrency}`]);
         }
-
         const ws = XLSX.utils.aoa_to_sheet(rows);
         ws['!cols'] = [{wch:20}, {wch:15}, {wch:40}, {wch:10}, {wch:12}, {wch:15}];
-
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Order");
         XLSX.writeFile(wb, `Order_${order.orderId || order.id}.xlsx`);
-
     } catch (e) { console.error("Excel export error:", e); }
 }

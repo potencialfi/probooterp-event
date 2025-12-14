@@ -22,14 +22,24 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static(DIST_DIR));
 app.use('/images', express.static(IMAGES_DIR));
 
+// Обновленная структура данных по умолчанию
 const DEFAULT_DATA = {
   users: [{ id: 1, login: 'admin', password: '123', name: 'Администратор' }],
   clients: [],
   models: [],
   orders: [],
   settings: { 
-    sizeGrid: { min: "", max: "" },
-    boxTemplates: { 6:{}, 8:{}, 10:{}, 12:{} },
+    // Массив сеток
+    sizeGrids: [
+        { id: 1, name: 'Стандарт', min: '40', max: '45', isDefault: true },
+    ],
+    defaultSizeGridId: 1, // ID сетки по умолчанию
+    boxTemplates: { 
+        // Шаблоны ящиков, ключом является ID сетки
+        '1': { 
+            6: {40:1, 41:1, 42:2, 43:1, 44:1}, // Пример комплектации
+        }
+    }, 
     exchangeRates: { usd: 0, eur: 0, isManual: false },
     mainCurrency: 'USD',
     brandName: 'SHOE EXPO',
@@ -60,25 +70,46 @@ const initDB = () => {
   }
   
   let changed = false;
+  
+  // Миграция настроек (обеспечение наличия всех полей)
   if (!db.settings) { db.settings = DEFAULT_DATA.settings; changed = true; }
   if (db.settings.brandName === undefined) { db.settings.brandName = DEFAULT_DATA.settings.brandName; changed = true; }
   if (db.settings.brandPhones === undefined) { db.settings.brandPhones = DEFAULT_DATA.settings.brandPhones; changed = true; }
   if (db.settings.brandLogo === undefined) { db.settings.brandLogo = DEFAULT_DATA.settings.brandLogo; changed = true; }
   
-  // МИГРАЦИЯ: Присвоение порядковых номеров старым заказам
+  // Миграция старой структуры sizeGrid в sizeGrids
+  if (db.settings && db.settings.sizeGrid && !db.settings.sizeGrids) {
+       console.log("Migrating sizeGrid structure...");
+       db.settings.sizeGrids = [{ 
+           id: 1, 
+           name: 'Основная', 
+           min: db.settings.sizeGrid.min || '40', 
+           max: db.settings.sizeGrid.max || '45', 
+           isDefault: true 
+       }];
+       db.settings.defaultSizeGridId = 1;
+       // Удаляем старый объект sizeGrid, чтобы не мешал
+       delete db.settings.sizeGrid; 
+       changed = true;
+  }
+  
+  // Миграция старых шаблонов ящиков в формат { '1': templates }
+  if (db.settings && db.settings.boxTemplates) {
+       // Если это старый формат { 6:{...}, 8:{...} } и нет ключа '1', переносим
+       if (!db.settings.boxTemplates['1'] && Object.keys(db.settings.boxTemplates).some(k => k.match(/^\d+$/))) {
+            console.log("Migrating boxTemplates structure...");
+            db.settings.boxTemplates = { '1': db.settings.boxTemplates };
+            changed = true;
+       }
+  }
+
+  // Миграция ID заказов
   if (db.orders && db.orders.length > 0) {
       const missingIds = db.orders.some(o => !o.orderId);
       if (missingIds) {
           console.log("Migrating Order IDs...");
-          // Сортируем от старых к новым по дате создания (id)
           const sortedOrders = [...db.orders].sort((a, b) => a.id - b.id);
-          
-          // Присваиваем номера 1, 2, 3...
-          sortedOrders.forEach((order, index) => {
-              order.orderId = index + 1;
-          });
-
-          // Сохраняем (обычно мы храним новые сверху, поэтому реверс)
+          sortedOrders.forEach((order, index) => { order.orderId = index + 1; });
           db.orders = sortedOrders.reverse();
           changed = true;
       }
@@ -89,6 +120,7 @@ const initDB = () => {
 
 initDB();
 
+// --- Служебные функции (валидация/форматирование) ---
 const normalizePhone = (phone) => String(phone).replace(/\D/g, '');
 const isValidPhone = (phone) => {
   const clean = normalizePhone(phone);
@@ -151,7 +183,6 @@ app.post('/api/upload-logo', (req, res) => {
         fs.writeFileSync(filePath, buffer);
 
         const db = readDB();
-        // Удаляем старое лого
         if (db.settings.brandLogo) {
              const oldPath = path.join(IMAGES_DIR, db.settings.brandLogo);
              if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -231,6 +262,7 @@ app.post('/api/clients/import', (req, res) => {
 // --- MODELS ---
 app.post('/api/models', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
+  // Добавляем gridId, если он пришел
   const newModel = { ...req.body, id: Date.now() };
   db.models.push(newModel);
   writeDB(db);
@@ -283,7 +315,6 @@ app.post('/api/models/import', (req, res) => {
 app.post('/api/orders', (req, res) => {
   const db = readDB() || DEFAULT_DATA;
   
-  // Генерация следующего ID
   const maxOrderId = db.orders.reduce((max, o) => Math.max(max, o.orderId || 0), 0);
   const nextId = maxOrderId + 1;
 
@@ -296,6 +327,25 @@ app.post('/api/orders', (req, res) => {
   db.orders.unshift(newOrder);
   writeDB(db);
   res.json(newOrder);
+});
+
+app.put('/api/orders/:id', (req, res) => {
+    const db = readDB() || DEFAULT_DATA;
+    const id = Number(req.params.id);
+    const index = db.orders.findIndex(o => o.id === id);
+    
+    if (index !== -1) {
+        const existing = db.orders[index];
+        db.orders[index] = { 
+            ...req.body, 
+            id: id, 
+            orderId: existing.orderId 
+        };
+        writeDB(db);
+        res.json(db.orders[index]);
+    } else {
+        res.status(404).json({ message: "Заказ не найден" });
+    }
 });
 
 app.delete('/api/orders/:id', (req, res) => {

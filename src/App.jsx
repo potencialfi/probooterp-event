@@ -20,8 +20,6 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
-  
-  // Данные приложения
   const [clients, setClients] = useState([]);
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -36,7 +34,6 @@ export default function App() {
       brandLogo: null
   });
 
-  // --- ЧЕРНОВИК ЗАКАЗА ---
   const initialOrderState = {
       cart: [],
       clientPhone: '',
@@ -63,6 +60,7 @@ export default function App() {
              if(data.settings.sizeGrid) setSizeGrid(data.settings.sizeGrid);
              setSettings(prev => ({ ...prev, ...data.settings }));
              
+             // Инициализация валюты для нового заказа
              setOrderDraft(prev => ({
                  ...prev,
                  paymentCurrency: prev.paymentCurrency || data.settings.mainCurrency || 'USD'
@@ -85,6 +83,28 @@ export default function App() {
           paymentCurrency: settings.mainCurrency || 'USD'
       });
       triggerToast("Форма заказа очищена");
+  };
+
+  // ФУНКЦИЯ РЕДАКТИРОВАНИЯ ЗАКАЗА
+  const handleEditOrder = (order) => {
+      // Находим клиента, чтобы заполнить поля
+      const client = clients.find(c => c.id === order.clientId);
+      
+      setOrderDraft({
+          id: order.id, // Важно! Это флаг того, что мы редактируем
+          orderId: order.orderId, // Номер для отображения
+          cart: order.items,
+          clientPhone: client ? client.phone : '',
+          clientName: client ? client.name : '',
+          clientCity: client ? client.city : '',
+          selectedClient: client,
+          prepayment: order.payment ? order.payment.originalAmount : '',
+          paymentCurrency: order.payment ? order.payment.originalCurrency : (settings.mainCurrency || 'USD'),
+          lumpDiscount: order.lumpDiscount || ''
+      });
+      
+      setActiveTab('newOrder');
+      triggerToast(`Редактирование заказа №${order.orderId || ''}`);
   };
 
   const goToSettingsAndHighlight = (section) => {
@@ -149,21 +169,18 @@ export default function App() {
         {activeTab === 'clients' && <ClientsPage clients={clients} setClients={setClients} triggerToast={triggerToast} handleFileImport={handleFileImport} loadAllData={loadAllData} setImportResult={setImportResult}/>}
         {activeTab === 'models' && <ModelsPage models={models} setModels={setModels} triggerToast={triggerToast} handleFileImport={handleFileImport} loadAllData={loadAllData} setImportResult={setImportResult} settings={settings}/>}
         
-        {/* ИСПРАВЛЕНО: Передаем settings в OrdersPage */}
-        {activeTab === 'history' && <OrdersPage orders={orders} clients={clients} settings={settings} />}
-        
-        {activeTab === 'settings' && (
-            <SettingsPage 
-                sizeGrid={sizeGrid} 
-                setSizeGrid={setSizeGrid} 
-                apiCall={apiCall} 
-                triggerToast={triggerToast} 
+        {activeTab === 'history' && (
+            <OrdersPage 
+                orders={orders} 
+                setOrders={setOrders} // Передаем сеттер для удаления
+                clients={clients} 
                 settings={settings} 
-                setSettings={setSettings} 
-                highlightSetting={highlightSetting}
-                setHighlightSetting={setHighlightSetting}
+                triggerToast={triggerToast}
+                onEdit={handleEditOrder} // Передаем функцию редактирования
             />
         )}
+        
+        {activeTab === 'settings' && <SettingsPage sizeGrid={sizeGrid} setSizeGrid={setSizeGrid} apiCall={apiCall} triggerToast={triggerToast} settings={settings} setSettings={setSettings} highlightSetting={highlightSetting} setHighlightSetting={setHighlightSetting}/>}
         
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         <ImportResultModal result={importResult} onClose={() => setImportResult(null)} />

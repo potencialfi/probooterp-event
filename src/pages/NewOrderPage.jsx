@@ -5,7 +5,7 @@ import { normalizePhone, formatPhoneNumber, getNoun, convertPrice, convertToUSD 
 import { Button, Input, Modal } from '../components/UI';
 import InvoicePreview from '../components/InvoicePreview';
 
-// --- Компонент модального окна скидок ---
+// --- Компонент модального окна скидок (без изменений) ---
 const DiscountModal = ({ isOpen, onClose, onApply, cart, mainCurrency }) => {
     if (!isOpen) return null;
 
@@ -120,8 +120,12 @@ const NewOrderPage = ({
   const [showInvoice, setShowInvoice] = useState(false);
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
 
-  const { cart, clientPhone, clientName, clientCity, selectedClient, prepayment, paymentCurrency, lumpDiscount } = orderDraft;
+  const { cart, clientPhone, clientName, clientCity, selectedClient, prepayment, paymentCurrency, lumpDiscount, id: editingId, orderId: displayOrderId } = orderDraft;
   const mainCurrency = settings?.mainCurrency || 'USD';
+  
+  const currentM = models.find(m => m.id === parseInt(selModel) || m.id === selModel);
+  const sizeGrids = settings?.sizeGrids || [];
+  const boxTemplates = settings?.boxTemplates || {};
 
   // --- РАСЧЕТЫ ---
   const subTotalUSD = cart.reduce((acc, i) => {
@@ -129,9 +133,7 @@ const NewOrderPage = ({
       return acc + (priceWithDiscount * i.qty);
   }, 0);
 
-  // Конвертируем общую скидку в USD для расчетов (так как вводим её в mainCurrency)
   const lumpDiscountUSD = convertToUSD(parseFloat(lumpDiscount) || 0, mainCurrency, settings?.exchangeRates);
-
   const totalCartUSD = Math.max(0, subTotalUSD - lumpDiscountUSD);
   const totalPairsInCart = cart.reduce((acc, i) => acc + i.qty, 0);
 
@@ -140,7 +142,6 @@ const NewOrderPage = ({
       const r = rates || { usd: 1, eur: 1 };
       const usdToUah = r.usd || 1;
       const eurToUah = r.eur || 1;
-
       if (t === 'USD') return 1; 
       if (t === 'UAH') return usdToUah;
       if (t === 'EUR') return usdToUah / eurToUah;
@@ -152,7 +153,29 @@ const NewOrderPage = ({
   const prepaymentInUSD = paymentRate > 0 ? Number(prepayment) / paymentRate : 0;
   const remainingTotalUSD = Math.max(0, totalCartUSD - prepaymentInUSD);
 
-  // --- HANDLERS (Без изменений) ---
+  // --- ЛОГИКА РАЗМЕРНЫХ СЕТОК И ЯЩИКОВ ---
+  const currentGrid = useMemo(() => {
+      if (!currentM) {
+          const defaultId = settings?.defaultSizeGridId;
+          return sizeGrids.find(g => g.id === defaultId) || sizeGrids[0] || null;
+      }
+      return sizeGrids.find(g => g.id === currentM.gridId) || sizeGrids.find(g => g.id === settings?.defaultSizeGridId) || sizeGrids[0] || null;
+  }, [currentM, sizeGrids, settings?.defaultSizeGridId]);
+  
+  const sizeRange = useMemo(() => {
+    if (!currentGrid) return [];
+    const min = parseInt(currentGrid.min);
+    const max = parseInt(currentGrid.max);
+    if (isNaN(min) || isNaN(max) || min > max) return [];
+    return Array.from({ length: max - min + 1 }, (_, i) => String(min + i));
+  }, [currentGrid]);
+
+  const currentBoxTemplates = useMemo(() => {
+      if (!currentGrid) return {};
+      return boxTemplates[currentGrid.id] || {};
+  }, [currentGrid, boxTemplates]);
+
+  // --- HANDLERS (Клиент, Дисконт) ---
   const updateDraft = (fields) => { setOrderDraft(prev => ({ ...prev, ...fields })); };
   const applyDiscount = (result) => {
       if (result.type === 'lump') {
@@ -186,21 +209,21 @@ const NewOrderPage = ({
     if (found) { updateDraft({ selectedClient: found, clientName: found.name, clientCity: found.city }); } 
     else { updateDraft({ selectedClient: null }); }
   }, [clientPhone, clients]);
-
   const selectClientSuggestion = (client) => {
     updateDraft({ clientPhone: client.phone, clientName: client.name, clientCity: client.city, selectedClient: client });
     setShowClientList(false);
   };
-
-  const currentM = models.find(m => m.id === parseInt(selModel) || m.id === selModel);
+  
+  // --- HANDLERS (Товар и Корзина) ---
   const handleSizeChange = (size, val) => {
     const intVal = parseInt(val) || 0;
     setSizeQuantities(prev => ({ ...prev, [size]: intVal >= 0 ? intVal : 0 }));
   };
+
   const addBox = (boxSize) => {
-     const template = settings?.boxTemplates?.[boxSize];
+     const template = currentBoxTemplates[boxSize];
      if (!template || Object.keys(template).length === 0 || Object.values(template).reduce((a,b)=>a+b,0) === 0) {
-         triggerToast("Ящики не прописаны", "error"); return;
+         triggerToast(`Комплектация для ящика ${boxSize} пар (сетка ${currentGrid?.name}) не задана.`, "error"); return;
      }
      setSizeQuantities(prev => {
         const next = { ...prev };
@@ -209,34 +232,49 @@ const NewOrderPage = ({
      });
      triggerToast(`Добавлен ящик ${boxSize} пар`);
   };
+
   const addToCart = () => {
     if (!currentM) return;
     const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
     if (totalQty === 0) { triggerToast("Укажите количество", 'error'); return; }
-    const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s} (${q})`);
+    const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s}(${q})`);
     const note = noteParts.join(', ');
-    updateDraft({ cart: [...cart, { ...currentM, modelId: currentM.id, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: 0, total: currentM.price * totalQty }] });
+    
+    // Сохраняем ID сетки в товар для будущей справки
+    const gridId = currentM.gridId || settings?.defaultSizeGridId || null;
+
+    updateDraft({ 
+        cart: [...cart, { 
+            ...currentM, 
+            modelId: currentM.id, 
+            qty: totalQty, 
+            note, 
+            sizes: sizeQuantities, 
+            discountPerPair: 0, 
+            total: currentM.price * totalQty,
+            gridId: gridId // Сохраняем ID сетки для этой позиции
+        }] 
+    });
+    
     setSizeQuantities({}); setSelModel(''); setSearch(''); setShowModelList(false);
   };
+  
   const openEditModal = (index) => {
       setEditingCartIndex(index);
       const itemToEdit = cart[index];
       if (itemToEdit.sizes) { setSizeQuantities({ ...itemToEdit.sizes }); } else { setSizeQuantities({}); }
-      // Конвертируем сохраненную скидку (USD) обратно в mainCurrency для редактирования
       const discountInMain = convertPrice(itemToEdit.discountPerPair || 0, mainCurrency, settings.exchangeRates);
       setEditingDiscount(discountInMain === '0.00' ? '' : discountInMain);
   };
+
   const saveEditedItem = () => {
       if (editingCartIndex === null) return;
       const item = cart[editingCartIndex];
       const totalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
       if (totalQty === 0) { triggerToast("Количество не может быть 0", "error"); return; }
-      
-      const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s} (${q})`);
+      const noteParts = Object.entries(sizeQuantities).filter(([_, q]) => q > 0).sort(([a], [b]) => Number(a) - Number(b)).map(([s, q]) => `${s}(${q})`);
       const note = noteParts.join(', ');
-      
       const discountUSD = convertToUSD(parseFloat(editingDiscount) || 0, mainCurrency, settings.exchangeRates);
-
       const updatedItem = { ...item, qty: totalQty, note, sizes: sizeQuantities, discountPerPair: discountUSD, total: (item.price - discountUSD) * totalQty };
       const newCart = [...cart];
       newCart[editingCartIndex] = updatedItem;
@@ -245,14 +283,17 @@ const NewOrderPage = ({
       setSizeQuantities({}); 
       setEditingDiscount('');
   };
+
   const deleteFromCart = (index) => {
       const newCart = cart.filter((_, x) => x !== index);
       updateDraft({ cart: newCart });
       setConfirmDeleteIndex(null);
   }
+
   const saveOrder = async () => {
     if (!clientPhone || !clientName) { triggerToast("Заполните данные клиента", 'error'); return; }
     if (cart.length === 0) { triggerToast("Корзина пуста", 'error'); return; }
+    
     let finalClientId = selectedClient?.id;
     if (!finalClientId) {
         try {
@@ -262,43 +303,47 @@ const NewOrderPage = ({
             finalClientId = savedClient.id;
         } catch (e) { triggerToast(`Ошибка клиента: ${e.message}`, 'error'); return; }
     }
-    const order = { 
+
+    const orderData = { 
         date: new Date().toISOString(), clientId: parseInt(finalClientId), items: cart, total: totalCartUSD, lumpDiscount: lumpDiscountUSD,
         payment: { originalAmount: Number(prepayment), originalCurrency: paymentCurrency, rateAtMoment: paymentRate, prepaymentInUSD: prepaymentInUSD }
     };
+
     try {
-      const saved = await apiCall('/orders', 'POST', order);
-      setOrders([saved, ...orders]);
-      clearOrderDraft();
+      if (editingId) {
+          const updated = await apiCall(`/orders/${editingId}`, 'PUT', orderData);
+          setOrders(prev => prev.map(o => o.id === editingId ? updated : o));
+          triggerToast(`Заказ №${displayOrderId} обновлен`);
+          clearOrderDraft(); 
+      } else {
+          const saved = await apiCall('/orders', 'POST', orderData);
+          setOrders([saved, ...orders]);
+          clearOrderDraft();
+          triggerToast("Заказ успешно создан");
+      }
       setShowInvoice(false);
-      triggerToast("Заказ успешно сохранен");
-    } catch(e) { triggerToast("Ошибка сохранения заказа", 'error'); }
+    } catch(e) { triggerToast("Ошибка сохранения", 'error'); }
   };
 
   const filteredM = models.filter(m => m.sku.toLowerCase().includes(search.toLowerCase()) || m.color.toLowerCase().includes(search.toLowerCase()));
   const filteredClients = useMemo(() => {
      if (clientPhone.length < 2) return [];
-     const search = normalizePhone(clientPhone);
+     const searchClean = normalizePhone(clientPhone);
      return clients.filter(c => {
         const dbPhone = normalizePhone(c.phone);
         if (selectedClient && c.id === selectedClient.id) return false;
-        if (dbPhone.includes(search)) return true;
-        if (search.startsWith('0') && dbPhone.includes('38' + search)) return true;
+        if (dbPhone.includes(searchClean)) return true;
+        if (searchClean.startsWith('0') && dbPhone.includes('38' + searchClean)) return true;
         return false;
      });
   }, [clients, clientPhone, selectedClient]);
-  const minSize = parseInt(sizeGrid?.min);
-  const maxSize = parseInt(sizeGrid?.max);
-  const rangeLength = Math.max(0, maxSize - minSize + 1);
-  const sizeRange = (isNaN(minSize) || isNaN(maxSize)) ? [] : Array.from({ length: rangeLength }, (_, i) => minSize + i);
-  const currentTotalQty = Object.values(sizeQuantities).reduce((a, b) => a + b, 0);
-  const currentTotalSumUSD = currentM ? currentM.price * currentTotalQty : 0;
+  
 
   // --- RENDER ---
   if (showInvoice) {
-      // Собираем объект для превью
       const orderForPreview = {
-          id: orders.length + 1, 
+          id: editingId || (orders.length + 1),
+          orderId: displayOrderId, 
           date: new Date(),
           client: { name: clientName, city: clientCity, phone: clientPhone },
           items: cart,
@@ -306,11 +351,14 @@ const NewOrderPage = ({
           payment: { originalAmount: prepayment, originalCurrency: paymentCurrency, prepaymentInUSD: prepaymentInUSD }
       };
 
+      const maxOrderId = orders.reduce((max, o) => Math.max(max, o.orderId || 0), 0);
+      const nextId = editingId ? displayOrderId : (maxOrderId + 1);
+
       return <InvoicePreview 
-          order={orderForPreview}
+          order={orderForPreview} 
           settings={settings} 
           onBack={() => setShowInvoice(false)}
-          nextOrderId={orders.length + 1}
+          nextOrderId={nextId}
       />;
   }
 
@@ -378,14 +426,19 @@ const NewOrderPage = ({
                 </span>
               </div>
               
-              {sizeRange.length === 0 ? (
-                  <div className="text-center p-4 bg-yellow-50 text-yellow-700 rounded mb-4 border border-yellow-200 font-bold">
-                      ⚠ Размерная сетка не настроена! Перейдите в настройки.
-                  </div>
+              {!currentGrid ? (
+                   <div className="text-center p-4 bg-yellow-50 text-yellow-700 rounded mb-4 border border-yellow-200 font-bold">
+                       ⚠ Размерная сетка не настроена или не найдена!
+                   </div>
               ) : (
                   <>
                   <div className="mb-4">
-                      <div className="flex justify-between items-center mb-2"><label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Размеры ({minSize}-{maxSize})</label><button onClick={() => setSizeQuantities({})} className="text-gray-400 hover:text-red-500 text-xs flex items-center gap-1 transition-colors"><Eraser size={14}/>Очистить</button></div>
+                      <div className="flex justify-between items-center mb-2">
+                          <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                              Размеры ({currentGrid.name}: {currentGrid.min}-{currentGrid.max})
+                          </label>
+                          <button onClick={() => setSizeQuantities({})} className="text-gray-400 hover:text-red-500 text-xs flex items-center gap-1 transition-colors"><Eraser size={14}/>Очистить</button>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                           {sizeRange.map(size => (
                               <div key={size} className="flex flex-col items-center">
@@ -404,9 +457,19 @@ const NewOrderPage = ({
                       </div>
                   </div>
                   <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-                     {[6, 8, 10, 12].map(boxSize => (
-                        <button key={boxSize} onClick={() => addBox(boxSize)} className="bg-white border border-blue-200 text-blue-700 py-2 rounded-lg text-xs font-bold hover:bg-blue-50 active:scale-95 transition-all shadow-sm flex justify-center items-center gap-1"><Box size={14}/> {boxSize}-ти парный +1</button>
-                     ))}
+                     {[6, 8, 10, 12].map(boxSize => {
+                        const templateExists = currentBoxTemplates[boxSize] && Object.keys(currentBoxTemplates[boxSize]).length > 0;
+                        return (
+                            <button 
+                                key={boxSize} 
+                                onClick={() => addBox(boxSize)} 
+                                className="bg-white border border-blue-200 text-blue-700 py-2 rounded-lg text-xs font-bold hover:bg-blue-50 active:scale-95 transition-all shadow-sm flex justify-center items-center gap-1 disabled:opacity-50"
+                                disabled={!templateExists}
+                            >
+                                <Box size={14}/> {boxSize}-ти парный +1
+                            </button>
+                        );
+                     })}
                   </div>
                   </>
               )}
@@ -422,7 +485,7 @@ const NewOrderPage = ({
                         </div>
                     )}
                 </div>
-                <Button onClick={addToCart} size="md" icon={Plus} className="h-[46px] px-8">В заказ</Button>
+                <Button onClick={addToCart} size="md" icon={Plus} className="h-[46px] px-8" disabled={!currentGrid}>В заказ</Button>
               </div>
             </div>
           )}
@@ -444,15 +507,15 @@ const NewOrderPage = ({
                 <div className="text-xs text-gray-500 mt-1">{i.qty} {getNoun(i.qty, 'пара', 'пары', 'пар')}
                    {i.note && <div className="mt-1 flex flex-wrap gap-1">{i.note.split(', ').map((n, ni) => (<span key={ni} className="bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px] font-bold text-gray-600 shadow-sm">{n}</span>))}</div>}
                 </div>
-                {i.discountPerPair > 0 && <div className="text-[10px] text-green-600 font-bold bg-green-50 inline-block px-1 rounded mt-1">Скидка: -{convertPrice(i.discountPerPair, mainCurrency, settings.exchangeRates)} {mainCurrency}</div>}
+                {i.discountPerPair > 0 && <div className="text-[10px] text-green-600 font-bold bg-green-50 inline-block px-1 rounded mt-1">Скидка: -{convertPrice(i.discountPerPair, mainCurrency, settings.exchangeRates)} {mainCurrency}/пара</div>}
               </div>
               <div className="text-right flex flex-col justify-between items-end">
                 <div className="font-bold text-gray-800">
                     {convertPrice(i.total, mainCurrency, settings.exchangeRates)} {mainCurrency}
                 </div>
                 <div className="flex gap-2 mt-1">
-                   <button onClick={() => openEditModal(idx)} className="text-blue-400 hover:text-blue-600 p-1 bg-blue-50 rounded transition-colors"><Edit size={16}/></button>
-                   <button onClick={() => setConfirmDeleteIndex(idx)} className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded transition-colors"><Trash2 size={16}/></button>
+                   <button onClick={() => openEditModal(idx)} className="p-1 text-blue-400 hover:text-blue-600 bg-blue-50 rounded transition-colors" title="Редактировать"><Edit size={16}/></button>
+                   <button onClick={() => setConfirmDeleteIndex(idx)} className="p-1 text-red-400 hover:text-red-600 bg-red-50 rounded transition-colors" title="Удалить"><Trash2 size={16}/></button>
                 </div>
               </div>
             </div>
@@ -468,13 +531,13 @@ const NewOrderPage = ({
              </div>
              <div className="flex gap-2 mb-2">
                  <div className="relative w-full">
-                    <input 
+                    <Input 
                         type="number" 
                         placeholder="Сумма предоплаты" 
-                        className="w-full border border-gray-200 rounded-lg py-2 px-3 focus:outline-none focus:border-green-500 transition-colors"
                         value={prepayment}
-                        onFocus={(e) => e.target.select()}
                         onChange={e => updateDraft({ prepayment: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg py-2 px-3 focus:outline-none focus:border-green-500 transition-colors"
+                        onFocus={(e) => e.target.select()}
                     />
                  </div>
                  <select 
@@ -516,7 +579,7 @@ const NewOrderPage = ({
                 <span className="text-blue-600">
                     {convertPrice(remainingTotalUSD, mainCurrency, settings.exchangeRates)} {mainCurrency}
                 </span>
-                <button onClick={() => setIsDiscountModalOpen(true)} className="p-1.5 bg-gray-100 rounded-lg hover:bg-blue-100 hover:text-blue-600 transition-colors">
+                <button onClick={() => setIsDiscountModalOpen(true)} className="p-1.5 bg-gray-100 rounded-lg hover:bg-blue-100 hover:text-blue-600 transition-colors" title="Добавить скидку">
                     <Edit size={18}/>
                 </button>
             </div>
@@ -524,7 +587,9 @@ const NewOrderPage = ({
           
           <div className="grid grid-cols-4 gap-2">
              <Button onClick={() => setShowInvoice(true)} variant="secondary" className="col-span-1" icon={Printer} title="Печать"></Button>
-             <Button onClick={saveOrder} variant="success" className="col-span-3 text-lg shadow-xl shadow-green-100 hover:shadow-green-200 transform hover:-translate-y-1 transition-all">Оформить</Button>
+             <Button onClick={saveOrder} variant="success" className="col-span-3 text-lg shadow-xl shadow-green-100 hover:shadow-green-200 transform hover:-translate-y-1 transition-all">
+                 {editingId ? 'Сохранить изменения' : 'Оформить заказ'}
+             </Button>
           </div>
         </div>
       </div>
@@ -558,7 +623,7 @@ const NewOrderPage = ({
                  <div className="mb-4">
                     <div className="flex justify-between items-center mb-2"><label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Размеры</label><button onClick={() => setSizeQuantities({})} className="text-gray-400 hover:text-red-500 text-xs flex items-center gap-1 transition-colors"><Eraser size={14}/>Очистить</button></div>
                     <div className="flex flex-wrap gap-2">
-                        {Array.from({ length: Math.max(0, parseInt(sizeGrid.max) - parseInt(sizeGrid.min) + 1) }, (_, i) => parseInt(sizeGrid.min) + i).map(size => (
+                        {sizeRange.map(size => (
                             <div key={size} className="flex flex-col items-center">
                                 <span className="text-xs text-gray-500 font-medium mb-1">{size}</span>
                                 <input 
