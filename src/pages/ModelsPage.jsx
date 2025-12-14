@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, Download, Upload, DollarSign } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Download, Upload } from 'lucide-react';
 import { Button, Input, Modal, Select, Pagination } from '../components/UI';
 import { apiCall } from '../api';
 import { convertPrice, handleExportExcel, convertToUSD } from '../utils';
 
 const initialModel = { sku: '', color: '', price: '', gridId: '' };
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 20; // Вернули 20 элементов, так как они стали компактнее
 
 const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAllData, setImportResult, settings }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -97,57 +97,79 @@ const ModelsPage = ({ models, setModels, triggerToast, handleFileImport, loadAll
   };
 
   return (
-    <div className="animate-fade-in pb-10">
-      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur pt-2 pb-4 -mx-6 px-6 md:-mx-10 md:px-10 border-b border-gray-200/50 mb-6 space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Модели обуви ({models.length})</h2>
-            <div className="flex gap-2">
-                <Button onClick={() => handleExport()} variant="secondary" icon={Download}>Экспорт</Button>
-                <label htmlFor="import-models"><input type="file" id="import-models" accept=".xlsx" onChange={(e) => handleFileImport(e, '/models/import', loadAllData)} className="hidden" /><Button variant="secondary" icon={Upload}>Импорт</Button></label>
-            </div>
+    <div className="space-y-6 animate-fade-in">
+      
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Модели обуви</h2>
+            <p className="text-sm text-gray-500 mt-1">Всего моделей: {models.length}</p>
           </div>
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-              <div><Input label="Артикул" value={newModel.sku} onChange={e => setNewModel({...newModel, sku: e.target.value})} placeholder="Арт..." /></div>
-              <div><Input label="Цвет" value={newModel.color} onChange={e => setNewModel({...newModel, color: e.target.value})} placeholder="Цвет..." /></div>
-              <div><Input label={`Цена (${mainCurrency})`} type="number" value={newModel.price} onChange={e => setNewModel({...newModel, price: e.target.value})} placeholder="0.00" /></div>
-              <div>
+          <div className="flex gap-3">
+              <Button onClick={() => handleExport()} variant="secondary" icon={Download}>Экспорт</Button>
+              <label htmlFor="import-models">
+                  <input type="file" id="import-models" accept=".xlsx" onChange={(e) => handleFileImport(e, '/models/import', loadAllData)} className="hidden" />
+                  <Button variant="secondary" icon={Upload} as="span" className="cursor-pointer">Импорт</Button>
+              </label>
+          </div>
+      </div>
+
+      {/* ADD & SEARCH */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+              <div className="md:col-span-3"><Input label="Артикул" value={newModel.sku} onChange={e => setNewModel({...newModel, sku: e.target.value})} placeholder="Арт..." /></div>
+              <div className="md:col-span-3"><Input label="Цвет" value={newModel.color} onChange={e => setNewModel({...newModel, color: e.target.value})} placeholder="Цвет..." /></div>
+              <div className="md:col-span-2"><Input label={`Цена (${mainCurrency})`} type="number" value={newModel.price} onChange={e => setNewModel({...newModel, price: e.target.value})} placeholder="0.00" /></div>
+              <div className="md:col-span-2">
                   <Select label="Сетка" value={newModel.gridId || defaultGridId} onChange={e => setNewModel({...newModel, gridId: parseInt(e.target.value)})}>
                       {sizeGrids.map(g => (<option key={g.id} value={g.id}>{g.name} ({g.min}-{g.max})</option>))}
                   </Select>
               </div>
-              <div><Button onClick={handleAddModel} icon={Plus} className="w-full">Добавить</Button></div>
+              <div className="md:col-span-2"><Button onClick={handleAddModel} icon={Plus} className="w-full h-[42px]">Добавить</Button></div>
           </div>
-          <div className="px-6 md:px-10 pb-4">
-             <div className="relative w-full">
-                <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
-                <input className="w-full border border-gray-300 p-3 pl-12 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-gray-400 shadow-sm" placeholder="Поиск по артикулу..." value={search} onChange={e => setSearch(e.target.value)} />
-             </div>
+          
+          <div className="relative">
+             <Search className="absolute left-4 top-3 text-gray-400" size={20} />
+             <input className="w-full border border-gray-200 bg-gray-50 p-2.5 pl-12 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-gray-400" placeholder="Поиск по артикулу или цвету..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
       </div>
-      <div className="px-6 md:px-10 mt-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-            <table className="w-full text-left">
-                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-                    <tr><th className="p-4 w-[40%]">Артикул</th><th className="p-4">Цвет</th><th className="p-4">Цена ({mainCurrency})</th><th className="p-4 text-sm">Сетка</th><th className="p-4 text-right">Действия</th></tr>
+
+      {/* TABLE */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+                <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider font-semibold">
+                    <tr>
+                        <th className="p-4 pl-6 w-[30%]">Артикул</th>
+                        <th className="p-4 w-[25%]">Цвет</th>
+                        <th className="p-4 w-[20%]">Цена ({mainCurrency})</th>
+                        <th className="p-4 w-[15%]">Сетка</th>
+                        <th className="p-4 pr-6 text-right w-[10%]">Действия</th>
+                    </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-50 text-sm">
                 {paginatedModels.map(m => (
-                    <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="p-4 font-bold text-gray-800">{m.sku}</td>
+                    <tr key={m.id} className="hover:bg-blue-50/30 transition-colors group">
+                        <td className="p-4 pl-6 font-bold text-gray-800">{m.sku}</td>
                         <td className="p-4 text-gray-600">{m.color}</td>
-                        <td className="p-4 font-mono text-green-600 font-bold">{convertPrice(m.price, mainCurrency, settings.exchangeRates)}</td>
-                        <td className="p-4 text-sm text-blue-600 font-medium whitespace-nowrap">{getGridLabel(m.gridId)}</td>
-                        <td className="p-4 text-right"><div className="flex justify-end gap-1"><button onClick={() => openEditModal(m)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors"><Edit size={18}/></button><button onClick={() => setConfirmDeleteId(m.id)} className="p-2 text-gray-400 hover:bg-red-100 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={18}/></button></div></td>
+                        <td className="p-4 font-mono text-green-600 font-bold bg-green-50/50 w-fit rounded">{convertPrice(m.price, mainCurrency, settings.exchangeRates)}</td>
+                        <td className="p-4 text-blue-600 text-xs font-medium bg-blue-50/50 rounded w-fit whitespace-nowrap">{getGridLabel(m.gridId)}</td>
+                        <td className="p-4 pr-6 text-right">
+                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => openEditModal(m)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors"><Edit size={16}/></button>
+                                <button onClick={() => setConfirmDeleteId(m.id)} className="p-2 text-gray-400 hover:bg-red-100 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                            </div>
+                        </td>
                     </tr>
                 ))}
-                {filteredModels.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-gray-400">Нет моделей</td></tr>}
+                {filteredModels.length === 0 && <tr><td colSpan="5" className="p-12 text-center text-gray-400">Моделей не найдено</td></tr>}
                 </tbody>
             </table>
-            </div>
-          </div>
-          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+        </div>
       </div>
+      
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+
       <Modal title="Редактировать модель" isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} footer={<Button onClick={handleSaveEdit} icon={Plus}>Сохранить</Button>}>
         <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4"><Input label="Артикул" value={editingModel.sku} onChange={e => setEditingModel({...editingModel, sku: e.target.value})} autoFocus/><Input label="Цвет" value={editingModel.color} onChange={e => setEditingModel({...editingModel, color: e.target.value})}/></div>

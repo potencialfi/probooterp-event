@@ -2,7 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Убираем стрелочки (spinners) в input type="number" */
+/* Гарантируем, что приложение занимает всю высоту */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Важно: убираем двойные скроллы */
+}
+
+/* Убираем стрелочки в input type="number" */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -12,26 +20,35 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* Настройки печати A4 */
-@media print {
-  @page {
-    size: A4;
-    margin: 0; /* Убираем браузерные отступы */
-  }
-  body {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  /* Скрываем скроллбары при печати */
-  .custom-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-}
-
+/* Кастомный скроллбар для всего приложения */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: #cbd5e1; /* slate-300 */
   border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8; /* slate-400 */
+}
+
+/* Анимации */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* Настройки печати */
+@media print {
+  @page { margin: 0; size: A4; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  aside, .no-print { display: none !important; }
+  #root, main { height: auto; overflow: visible; }
 }

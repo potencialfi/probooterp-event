@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Check, AlertCircle } from 'lucide-react';
+import { X, Check, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const Button = ({ children, onClick, variant = 'primary', size = 'md', icon: Icon, className = '', disabled = false, ...props }) => {
   const baseStyle = "flex items-center justify-center gap-2 font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -44,6 +44,7 @@ export const Input = ({ label, icon: Icon, className = '', ...props }) => (
   </div>
 );
 
+// ВАЖНЫЙ КОМПОНЕНТ ДЛЯ НАСТРОЕК И МОДЕЛЕЙ
 export const Select = ({ label, value, onChange, children, className = '', ...props }) => (
   <div className={className}>
     {label && <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 ml-1">{label}</label>}
@@ -66,7 +67,7 @@ export const Select = ({ label, value, onChange, children, className = '', ...pr
 export const Modal = ({ title, children, onClose, footer, isOpen = true }) => {
     if(!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-5 border-b border-gray-100">
                     <h3 className="font-bold text-xl text-gray-800">{title}</h3>
@@ -79,9 +80,8 @@ export const Modal = ({ title, children, onClose, footer, isOpen = true }) => {
     );
 };
 
-// ОБНОВЛЕННЫЙ TOAST: Белый, сверху по центру
 export const Toast = ({ message, type = 'success', onClose }) => (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-3 rounded-xl shadow-xl animate-slide-down bg-white border border-gray-100 min-w-[300px]">
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 px-6 py-3 rounded-xl shadow-xl animate-slide-down bg-white border border-gray-100 min-w-[300px]">
         {type === 'success' ? (
             <div className="bg-green-100 p-1 rounded-full text-green-600"><Check size={18}/></div>
         ) : (
@@ -113,5 +113,34 @@ export const ImportResultModal = ({ result, onClose }) => {
                 {errors.length === 0 && <div className="text-center text-gray-500 text-sm">Ошибок нет, все отлично!</div>}
             </div>
         </Modal>
+    );
+};
+
+// ВАЖНЫЙ КОМПОНЕНТ ДЛЯ ИСТОРИИ И МОДЕЛЕЙ
+export const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+    if (totalPages <= 1) return null;
+
+    return (
+        <div className="flex justify-center items-center gap-4 mt-6">
+            <button 
+                onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-600"
+            >
+                <ChevronLeft size={20}/>
+            </button>
+            
+            <span className="text-sm font-bold text-gray-600">
+                Страница {currentPage} из {totalPages}
+            </span>
+
+            <button 
+                onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-600"
+            >
+                <ChevronRight size={20}/>
+            </button>
+        </div>
     );
 };

@@ -12,7 +12,8 @@ const Sidebar = ({ activeTab, setActiveTab, user, onLogout }) => {
   ];
 
   return (
-    <aside className="w-72 bg-slate-900 text-white flex-col hidden md:flex shadow-2xl z-30">
+    // ДОБАВЛЕНО: h-full в список классов
+    <aside className="w-72 bg-slate-900 text-white flex-col hidden md:flex shadow-2xl z-30 h-full">
       <div className="p-6 border-b border-slate-800">
         <h1 className="text-2xl font-black flex items-center gap-2">👟 ShoeExpo <span className="text-blue-500">Pro</span></h1>
         <div className="text-xs text-slate-400 mt-2 flex justify-between items-center">

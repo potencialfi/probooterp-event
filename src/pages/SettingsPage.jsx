@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Ruler, Box, DollarSign, Briefcase, Plus, Trash2, Upload, CheckSquare, Square, Image as ImageIcon, RefreshCw, AlertTriangle, X, Globe, Phone } from 'lucide-react';
-import { Input, Button, Modal, Select } from '../components/UI';
-import { apiCall, uploadBrandLogo, IMG_URL } from '../api';
+import { Ruler, Box, Plus, Trash2, CheckSquare, Image as ImageIcon, RefreshCw, AlertTriangle, Globe, Phone, Briefcase } from 'lucide-react';
+import { Input, Button, Modal } from '../components/UI';
+import { uploadBrandLogo, IMG_URL } from '../api';
 import { formatPhoneNumber } from '../utils';
 
 const SettingsPage = ({ apiCall, triggerToast, settings, setSettings, highlightSetting, setHighlightSetting, loadAllData }) => {
@@ -63,7 +63,7 @@ const SettingsPage = ({ apiCall, triggerToast, settings, setSettings, highlightS
           await apiCall('/settings', 'POST', newSettings);
           if (updates.mainCurrency && loadAllData) await loadAllData();
           triggerToast("Сохранено");
-      } catch(e) { triggerToast("Ошибка", "error"); }
+      } catch(e) { triggerToast("Ошибка сохранения", "error"); }
   };
 
   const handleRateChange = (curr, val) => {
@@ -78,7 +78,7 @@ const SettingsPage = ({ apiCall, triggerToast, settings, setSettings, highlightS
         const newRates = { usd: Number(data.usd.toFixed(2)), eur: Number(data.eur.toFixed(2)), isManual: false };
         setRates(newRates);
         saveAll({ exchangeRates: newRates });
-        triggerToast("Курсы обновлены из НБУ");
+        triggerToast("Курсы обновлены (НБУ)");
     } catch (e) { triggerToast("Ошибка НБУ", "error"); }
   };
   const crossRate = (rates.usd > 0 && rates.eur > 0) ? (rates.eur / rates.usd).toFixed(3) : '-';
@@ -115,7 +115,7 @@ const SettingsPage = ({ apiCall, triggerToast, settings, setSettings, highlightS
       if (!newBoxSize) return;
       const sizeKey = String(newBoxSize);
       const currentTemplates = boxTemplates[activeGridId] || {};
-      if (Object.keys(currentTemplates).length >= 6) return triggerToast("Максимум 6 типов ящиков", "error");
+      if (Object.keys(currentTemplates).length >= 8) return triggerToast("Максимум 8 типов ящиков", "error");
       if (currentTemplates[sizeKey]) return triggerToast("Такой ящик уже есть", "error");
       const newTemplates = { ...boxTemplates };
       if(!newTemplates[activeGridId]) newTemplates[activeGridId] = {};
@@ -160,86 +160,91 @@ const SettingsPage = ({ apiCall, triggerToast, settings, setSettings, highlightS
   const isBoxConfigValid = activeBoxTab && currentTotal === parseInt(activeBoxTab);
 
   return (
-    <div className="space-y-8 animate-fade-in pb-20">
+    <div className="space-y-6 animate-fade-in pb-10">
        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-           <h2 className="text-3xl font-bold text-gray-800">Настройки</h2>
+           <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Настройки</h2>
+           
            <div className="flex gap-4 w-full md:w-auto">
-               <div className="bg-white px-4 py-3 rounded-2xl border flex items-center gap-3 shadow-sm flex-1 md:flex-none">
-                   <span className="font-bold text-gray-500 uppercase text-xs tracking-wide whitespace-nowrap">Основная валюта</span>
-                   <select className="font-bold text-blue-600 bg-transparent outline-none cursor-pointer text-lg" value={mainCurrency} onChange={e=>saveAll({mainCurrency:e.target.value})}><option value="USD">USD</option><option value="EUR">EUR</option><option value="UAH">UAH</option></select>
+               <div className="bg-white px-3 py-2 rounded-xl border flex items-center gap-2 shadow-sm flex-1 md:flex-none">
+                   <span className="font-bold text-gray-500 uppercase text-[10px] tracking-wide whitespace-nowrap">Основная валюта</span>
+                   <select className="font-bold text-blue-600 bg-transparent outline-none cursor-pointer text-sm" value={mainCurrency} onChange={e=>saveAll({mainCurrency:e.target.value})}><option value="USD">USD</option><option value="EUR">EUR</option><option value="UAH">UAH</option></select>
                </div>
-               <div ref={ratesRef} className="bg-white px-4 py-3 rounded-2xl border flex items-center gap-4 md:gap-6 shadow-sm flex-1 md:flex-none justify-between md:justify-start">
-                   <div className="flex items-center gap-2"><span className="font-bold text-gray-500">USD</span><input className="w-16 md:w-20 border rounded-lg text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 outline-none p-1" type="number" value={rates.usd} onFocus={(e) => e.target.select()} onChange={e=>handleRateChange('usd', e.target.value)}/></div>
-                   <div className="flex items-center gap-2"><span className="font-bold text-gray-500">EUR</span><input className="w-16 md:w-20 border rounded-lg text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 outline-none p-1" type="number" value={rates.eur} onFocus={(e) => e.target.select()} onChange={e=>handleRateChange('eur', e.target.value)}/></div>
-                   <div className="hidden md:flex flex-col text-xs text-gray-400 leading-tight border-l pl-3"><span>Кросс-курс</span><span className="font-bold text-gray-700 text-sm">{crossRate}</span></div>
-                   <button onClick={fetchNBU} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-2 rounded-lg transition-colors" title="Сбросить к НБУ"><RefreshCw size={18}/></button>
+               
+               <div ref={ratesRef} className="bg-white px-3 py-2 rounded-xl border flex items-center gap-4 shadow-sm flex-1 md:flex-none justify-between md:justify-start">
+                   <div className="flex items-center gap-2"><span className="font-bold text-gray-500 text-xs">USD</span><input className="w-14 border rounded-lg text-center font-bold text-sm focus:ring-2 focus:ring-blue-500 outline-none p-1" type="number" value={rates.usd} onFocus={(e) => e.target.select()} onChange={e=>handleRateChange('usd', e.target.value)}/></div>
+                   <div className="flex items-center gap-2"><span className="font-bold text-gray-500 text-xs">EUR</span><input className="w-14 border rounded-lg text-center font-bold text-sm focus:ring-2 focus:ring-blue-500 outline-none p-1" type="number" value={rates.eur} onFocus={(e) => e.target.select()} onChange={e=>handleRateChange('eur', e.target.value)}/></div>
+                   <button onClick={fetchNBU} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-lg transition-colors" title="Сбросить к НБУ"><RefreshCw size={14}/></button>
                </div>
            </div>
        </div>
 
-       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
-               <div className="flex items-center gap-3 border-b pb-4 mb-4"><Globe size={24} className="text-blue-600"/><h3 className="font-bold text-xl text-gray-800">Язык интерфейса</h3></div>
-               <div className="space-y-2">{['ru', 'ua', 'en'].map(lang => (<button key={lang} onClick={()=>setLanguage(lang)} className={`w-full flex items-center justify-between p-3 rounded-xl border ${language===lang ? 'bg-blue-50 border-blue-500 text-blue-800' : 'border-gray-200 hover:bg-gray-50'}`}><span className="font-bold">{lang === 'ru' ? 'Русский' : lang === 'ua' ? 'Українська' : 'English'}</span> {language===lang && <CheckSquare size={16}/>}</button>))}</div>
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+               <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-3"><Globe size={18} className="text-blue-600"/><h3 className="font-bold text-base text-gray-800">Язык интерфейса</h3></div>
+               <div className="space-y-2">{['ru', 'ua', 'en'].map(lang => (<button key={lang} onClick={()=>setLanguage(lang)} className={`w-full flex items-center justify-between p-2 rounded-lg border text-sm transition-all ${language===lang ? 'bg-blue-50 border-blue-500 text-blue-800' : 'border-gray-100 hover:bg-gray-50 text-gray-600'}`}><span className="font-medium">{lang === 'ru' ? 'Русский' : lang === 'ua' ? 'Українська' : 'English'}</span> {language===lang && <CheckSquare size={14}/>}</button>))}</div>
            </div>
-           <div className="md:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-10 items-start">
-               <div className="flex-1 space-y-6 w-full">
-                   <div className="flex items-center gap-3 border-b pb-4"><Briefcase size={24} className="text-blue-600"/><h3 className="font-bold text-xl">Брендинг</h3></div>
-                   <Input label="Название бренда" value={brandName} onChange={e=>{setBrandName(e.target.value); saveAll({brandName:e.target.value})}} className="text-lg" />
+           
+           <div className="md:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-8 items-start">
+               <div className="flex-1 space-y-4 w-full">
+                   <div className="flex items-center gap-2 border-b border-gray-100 pb-3"><Briefcase size={18} className="text-blue-600"/><h3 className="font-bold text-base text-gray-800">Брендинг</h3></div>
+                   <Input label="Название бренда" value={brandName} onChange={e=>{setBrandName(e.target.value); saveAll({brandName:e.target.value})}} />
                    <div>
-                       <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Контактные телефоны</label>
-                       <div className="space-y-2">{phones.map((p,i)=>(<div key={i} className="flex justify-between items-center text-base bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium text-gray-700"><span>{formatPhoneNumber(p)}</span> <button onClick={() => confirmDeletePhone(p)} className="text-gray-400 hover:text-red-500 bg-white p-1 rounded-lg border border-gray-200 shadow-sm transition-colors"><Trash2 size={18}/></button></div>))}</div>
-                       {phones.length < 3 && <div className="flex gap-2 mt-3"><Input value={newPhone} onChange={e=>setNewPhone(e.target.value)} placeholder="+380..." className="flex-1" /><Button onClick={addPhone} icon={Plus}>Добавить</Button></div>}
+                       <label className="text-xs font-bold text-gray-400 uppercase mb-2 block tracking-wide">Телефоны</label>
+                       <div className="space-y-2">{phones.map((p,i)=>(<div key={i} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded-lg border border-gray-100 font-medium text-gray-700"><span>{formatPhoneNumber(p)}</span> <button onClick={() => confirmDeletePhone(p)} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button></div>))}</div>
+                       {phones.length < 3 && <div className="flex gap-2 mt-2"><Input value={newPhone} onChange={e=>setNewPhone(e.target.value)} placeholder="+380..." className="flex-1 text-sm" /><Button onClick={addPhone} icon={Plus} size="sm">Добавить</Button></div>}
                    </div>
                </div>
-               <div className="w-full md:w-64 flex flex-col items-center md:items-start">
-                   <label className="text-xs font-bold text-gray-500 uppercase mb-2 block w-full text-left">Логотип</label>
-                   <div className="w-full aspect-video border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 hover:border-blue-400 transition-all group" onClick={()=>fileInputRef.current.click()}>{settings.brandLogo ? <img src={`${IMG_URL}/${settings.brandLogo}`} className="h-24 object-contain mb-2" onError={(e)=>e.target.style.display='none'}/> : <ImageIcon size={40} className="text-gray-300 group-hover:text-blue-400 transition-colors mb-2"/>}<span className="text-sm text-gray-500 group-hover:text-blue-500 font-medium">Нажмите для загрузки</span><input type="file" ref={fileInputRef} hidden onChange={handleLogoUpload}/></div>
+               <div className="w-full md:w-56 flex flex-col items-center md:items-start">
+                   <label className="text-xs font-bold text-gray-400 uppercase mb-2 block w-full text-left tracking-wide">Логотип</label>
+                   <div className="w-full aspect-video border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 hover:border-blue-400 transition-all group" onClick={()=>fileInputRef.current.click()}>{settings.brandLogo ? <img src={`${IMG_URL}/${settings.brandLogo}`} className="h-16 object-contain mb-1" onError={(e)=>e.target.style.display='none'}/> : <ImageIcon size={24} className="text-gray-300 group-hover:text-blue-400 transition-colors mb-1"/>}<span className="text-[10px] text-gray-400 group-hover:text-blue-500 font-medium">Загрузить</span><input type="file" ref={fileInputRef} hidden onChange={handleLogoUpload}/></div>
                </div>
            </div>
        </div>
 
-       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col h-full">
-               <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-xl flex items-center gap-2 text-gray-800"><Ruler className="text-blue-600"/> Размерные сетки</h3><button onClick={() => setIsGridModalOpen(true)} className="bg-blue-50 text-blue-600 p-2 rounded-xl hover:bg-blue-100 transition-colors" disabled={grids.length >= 5}><Plus size={20}/></button></div>
-               <div className="space-y-3 flex-1">{grids.map(g => (<div key={g.id} onClick={() => setActiveGridId(g.id)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative group ${activeGridId === g.id ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100 hover:border-blue-200'}`}><div className="flex justify-between items-start"><div><div className="font-bold text-lg text-gray-800">{g.name}</div><div className="text-sm text-gray-500 font-medium mt-1 bg-white inline-block px-2 py-0.5 rounded border border-gray-200 shadow-sm">{g.min} — {g.max}</div></div><div className="flex items-center gap-2">{g.isDefault ? (<span className="text-[10px] uppercase font-bold bg-green-100 text-green-700 px-2 py-1 rounded-md">По умолчанию</span>) : (<button onClick={(e) => handleSetDefault(g.id, e)} className="opacity-0 group-hover:opacity-100 text-xs bg-gray-200 hover:bg-green-100 hover:text-green-700 px-2 py-1 rounded transition-all">Сделать главной</button>)}<button onClick={(e) => { e.stopPropagation(); confirmDeleteGrid(g.id); }} className="text-gray-300 hover:text-red-500 p-1 transition-colors" disabled={grids.length <= 1}><Trash2 size={18}/></button></div></div></div>))}</div>
+       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+           {/* СЕТКИ */}
+           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full">
+               <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-base flex items-center gap-2 text-gray-800"><Ruler className="text-blue-600" size={18}/> Размерные сетки</h3><button onClick={() => setIsGridModalOpen(true)} className="bg-blue-50 text-blue-600 p-1.5 rounded-lg hover:bg-blue-100 transition-colors" disabled={grids.length >= 5}><Plus size={16}/></button></div>
+               <div className="space-y-2 flex-1">{grids.map(g => (<div key={g.id} onClick={() => setActiveGridId(g.id)} className={`p-3 rounded-xl border cursor-pointer transition-all relative group ${activeGridId === g.id ? 'border-blue-500 bg-blue-50/50 ring-1 ring-blue-500' : 'border-gray-100 hover:border-blue-200 hover:bg-gray-50'}`}><div className="flex justify-between items-center"><div><div className="font-bold text-sm text-gray-800">{g.name}</div><div className="text-xs text-gray-500 font-medium mt-0.5">{g.min} — {g.max}</div></div><div className="flex items-center gap-1">{g.isDefault ? (<span className="text-[10px] uppercase font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Главная</span>) : (<button onClick={(e) => handleSetDefault(g.id, e)} className="opacity-0 group-hover:opacity-100 text-[10px] bg-gray-200 hover:bg-green-100 hover:text-green-700 px-2 py-1 rounded transition-all">Сделать главной</button>)}<button onClick={(e) => { e.stopPropagation(); confirmDeleteGrid(g.id); }} className="text-gray-300 hover:text-red-500 p-1 transition-colors" disabled={grids.length <= 1}><Trash2 size={14}/></button></div></div></div>))}</div>
            </div>
-           <div className="xl:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+           
+           {/* ЯЩИКИ */}
+           <div className="xl:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                {currentGrid ? (
                    <>
-                   <div className="flex justify-between items-center mb-8">
-                       <div><h3 className="font-bold text-xl text-gray-800 flex items-center gap-2"><Box className="text-blue-600"/> Типы ящиков</h3><p className="text-gray-400 text-sm mt-1">Выберите ящик для настройки (сетка: <b>{currentGrid.name}</b>)</p></div>
+                   <div className="flex justify-between items-center mb-4">
+                       <div><h3 className="font-bold text-base text-gray-800 flex items-center gap-2"><Box className="text-blue-600" size={18}/> Типы ящиков</h3><p className="text-gray-400 text-xs mt-0.5">Сетка: <b>{currentGrid.name}</b></p></div>
                    </div>
                    
-                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 mb-8">
+                   <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3 mb-6">
                        {availableBoxes.map(s => (
-                           <div key={s} onClick={()=>setActiveBoxTab(s)} className={`relative h-28 rounded-2xl border-2 flex flex-col items-center justify-center cursor-pointer transition-all hover:shadow-md ${activeBoxTab===s ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-blue-200 bg-white'}`}>
-                               <span className="text-4xl font-bold text-gray-800 mb-1">{s}</span><span className="text-xs text-gray-500 font-bold uppercase tracking-wider">пар</span>
-                               <button onClick={(e) => confirmDeleteBox(e, s)} className="absolute top-2 right-2 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                           <div key={s} onClick={()=>setActiveBoxTab(s)} className={`relative h-14 rounded-lg border flex flex-col items-center justify-center cursor-pointer transition-all hover:shadow-sm ${activeBoxTab===s ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-100 hover:border-blue-300 bg-white text-gray-600'}`}>
+                               <span className="text-lg font-bold leading-none">{s}</span><span className="text-[9px] uppercase font-bold opacity-60">пар</span>
+                               <button onClick={(e) => confirmDeleteBox(e, s)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-white border border-gray-100 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={12}/></button>
                            </div>
                        ))}
-                       {availableBoxes.length < 6 && (<button onClick={() => setIsAddBoxModalOpen(true)} className="h-28 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/30 flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 hover:border-blue-400 transition-all"><Plus size={32}/><span className="text-xs font-bold mt-2 uppercase tracking-wide">Добавить тип</span></button>)}
+                       {availableBoxes.length < 8 && (<button onClick={() => setIsAddBoxModalOpen(true)} className="h-14 rounded-lg border border-dashed border-blue-200 bg-blue-50/30 flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 hover:border-blue-400 transition-all"><Plus size={20}/><span className="text-[9px] font-bold mt-0.5 uppercase tracking-wide">Добавить</span></button>)}
                    </div>
                    
                    {activeBoxTab ? (
-                       <div className="animate-slide-up bg-gray-50 rounded-2xl p-6 border border-gray-100">
-                           <div className="flex justify-between items-center mb-6">
-                               <h4 className="font-bold text-lg text-gray-700">Комплектация ящика на {activeBoxTab} пар</h4>
-                               <div className={`text-sm font-bold flex items-center gap-2 px-3 py-1.5 rounded-lg border ${isBoxConfigValid ? 'bg-green-100 text-green-700 border-green-200' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>{isBoxConfigValid ? <CheckSquare size={16}/> : <AlertTriangle size={16}/>}Собрано: {currentTotal} из {activeBoxTab}</div>
+                       <div className="animate-fade-in bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+                           <div className="flex justify-between items-center mb-3">
+                               <h4 className="font-bold text-sm text-gray-700">Состав ящика на {activeBoxTab} пар</h4>
+                               <div className={`text-[10px] font-bold flex items-center gap-1.5 px-2 py-1 rounded border ${isBoxConfigValid ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>{isBoxConfigValid ? <CheckSquare size={12}/> : <AlertTriangle size={12}/>}Собрано: {currentTotal} из {activeBoxTab}</div>
                            </div>
-                           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">{sizeRange.map(s => { const val = boxTemplates[activeGridId]?.[activeBoxTab]?.[s] || 0; return (<div key={s} className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all ${val > 0 ? 'border-blue-400 ring-2 ring-blue-100 bg-white' : 'border-gray-200 bg-gray-100/50'}`}><span className="text-gray-400 text-xs font-bold uppercase mb-1">Размер {s}</span><input type="number" min="0" className={`w-10 h-10 text-center text-lg font-bold bg-white rounded-lg outline-none border transition-colors ${val > 0 ? 'border-blue-400 text-blue-700' : 'border-gray-200 text-gray-300 focus:border-blue-400 focus:text-gray-800'}`} value={val || ''} onChange={e => handleUpdateBoxContent(s, e.target.value)} placeholder="0" onFocus={(e) => e.target.select()}/></div>)})}</div>
+                           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">{sizeRange.map(s => { const val = boxTemplates[activeGridId]?.[activeBoxTab]?.[s] || 0; return (<div key={s} className={`flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all ${val > 0 ? 'border-blue-300 bg-white shadow-sm' : 'border-gray-200 bg-gray-100/50'}`}><span className="text-gray-400 text-[9px] font-bold uppercase mb-0.5">{s}</span><input type="number" min="0" className={`w-8 h-6 text-center text-sm font-bold bg-transparent outline-none transition-colors ${val > 0 ? 'text-blue-700' : 'text-gray-300 focus:text-gray-800'}`} value={val || ''} onChange={e => handleUpdateBoxContent(s, e.target.value)} placeholder="-" onFocus={(e) => e.target.select()}/></div>)})}</div>
                        </div>
-                   ) : (<div className="text-center py-10 text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">Выберите ящик выше, чтобы настроить его состав</div>)}
+                   ) : (<div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-xs">Выберите ящик для настройки</div>)}
                    </>
-               ) : <div className="text-center text-gray-400 py-10">Нет сеток</div>}
+               ) : <div className="text-center text-gray-400 py-10 text-sm">Нет сеток</div>}
            </div>
        </div>
 
-       <Modal title="Новая размерная сетка" isOpen={isGridModalOpen} onClose={()=>setIsGridModalOpen(false)} footer={<Button onClick={handleAddGrid}>Создать</Button>}><div className="space-y-5"><Input label="Название сетки" value={newGridData.name} onChange={e=>setNewGridData({...newGridData, name:e.target.value})} placeholder="Например: Подростковая" autoFocus/><div className="grid grid-cols-2 gap-4"><Input label="Минимальный размер" type="number" value={newGridData.min} onChange={e=>setNewGridData({...newGridData, min:e.target.value})} placeholder="36"/><Input label="Максимальный размер" type="number" value={newGridData.max} onChange={e=>setNewGridData({...newGridData, max:e.target.value})} placeholder="41"/></div></div></Modal>
-       <Modal title="Удалить сетку?" isOpen={isDeleteGridModalOpen} onClose={()=>setIsDeleteGridModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeleteGridModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeleteGrid}>Удалить</Button></>}><div className="text-center text-gray-600 py-4">Вы действительно хотите удалить эту сетку?<br/>Это действие нельзя отменить.</div></Modal>
-       <Modal title="Удалить ящик?" isOpen={isDeleteBoxModalOpen} onClose={()=>setIsDeleteBoxModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeleteBoxModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeleteBox}>Удалить</Button></>}><div className="text-center text-gray-600 py-4">Удалить тип ящика на <b>{boxToDelete}</b> пар?</div></Modal>
-       <Modal title="Удалить телефон?" isOpen={isDeletePhoneModalOpen} onClose={()=>setIsDeletePhoneModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeletePhoneModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeletePhone}>Удалить</Button></>}><div className="text-center text-gray-600 py-4">Удалить номер <b>{phoneToDelete}</b>?</div></Modal>
-       <Modal title="Новый тип ящика" isOpen={isAddBoxModalOpen} onClose={()=>setIsAddBoxModalOpen(false)} footer={<Button onClick={handleAddBox}>Добавить</Button>}><div className="py-2"><Input label="Количество пар в ящике" type="number" value={newBoxSize} onChange={e=>setNewBoxSize(e.target.value)} autoFocus placeholder="Например: 15"/><p className="text-xs text-gray-500 mt-2">После добавления вы сможете настроить состав размеров.</p></div></Modal>
+       <Modal title="Новая сетка" isOpen={isGridModalOpen} onClose={()=>setIsGridModalOpen(false)} footer={<Button onClick={handleAddGrid}>Создать</Button>}><div className="space-y-4"><Input label="Название" value={newGridData.name} onChange={e=>setNewGridData({...newGridData, name:e.target.value})} placeholder="Например: Подростковая" autoFocus/><div className="grid grid-cols-2 gap-4"><Input label="Мин. размер" type="number" value={newGridData.min} onChange={e=>setNewGridData({...newGridData, min:e.target.value})} placeholder="36"/><Input label="Макс. размер" type="number" value={newGridData.max} onChange={e=>setNewGridData({...newGridData, max:e.target.value})} placeholder="41"/></div></div></Modal>
+       <Modal title="Удалить сетку?" isOpen={isDeleteGridModalOpen} onClose={()=>setIsDeleteGridModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeleteGridModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeleteGrid}>Удалить</Button></>}><div className="text-center text-gray-600 py-4 text-sm">Удалить сетку безвозвратно?</div></Modal>
+       <Modal title="Удалить ящик?" isOpen={isDeleteBoxModalOpen} onClose={()=>setIsDeleteBoxModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeleteBoxModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeleteBox}>Удалить</Button></>}><div className="text-center text-gray-600 py-4 text-sm">Удалить тип ящика на <b>{boxToDelete}</b> пар?</div></Modal>
+       <Modal title="Удалить телефон?" isOpen={isDeletePhoneModalOpen} onClose={()=>setIsDeletePhoneModalOpen(false)} footer={<><Button variant="secondary" onClick={()=>setIsDeletePhoneModalOpen(false)}>Отмена</Button><Button variant="danger" onClick={performDeletePhone}>Удалить</Button></>}><div className="text-center text-gray-600 py-4 text-sm">Удалить номер <b>{phoneToDelete}</b>?</div></Modal>
+       <Modal title="Новый тип ящика" isOpen={isAddBoxModalOpen} onClose={()=>setIsAddBoxModalOpen(false)} footer={<Button onClick={handleAddBox}>Добавить</Button>}><div className="py-2"><Input label="Количество пар" type="number" value={newBoxSize} onChange={e=>setNewBoxSize(e.target.value)} autoFocus placeholder="15"/><p className="text-xs text-gray-500 mt-2">Вы сможете настроить состав размеров после добавления.</p></div></Modal>
     </div>
   );
 };

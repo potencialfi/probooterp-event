@@ -20,54 +20,34 @@ export const getNoun = (number, one, two, five) => {
   return five;
 };
 
-// ИСПРАВЛЕННАЯ ФУНКЦИЯ КОНВЕРТАЦИИ
-// Принимает цену в БАЗОВОЙ валюте (обычно USD)
 export const convertPrice = (priceInBase, targetCurrency, rates) => {
   const val = parseFloat(priceInBase);
   if (isNaN(val)) return '0.00';
-
   const currency = targetCurrency ? targetCurrency.toUpperCase() : 'USD';
-  
-  // Если курсов нет, возвращаем как есть
   if (!rates) return val.toFixed(2);
 
   const usdRate = Number(rates.usd) || 0;
   const eurRate = Number(rates.eur) || 0;
 
-  // Логика: База данных хранит цены в USD.
-  // Мы конвертируем USD -> Target.
-  
-  if (currency === 'USD') {
-      return val.toFixed(2);
-  }
-  
-  if (currency === 'UAH') {
-      // USD -> UAH (умножаем на курс доллара)
-      return (val * usdRate).toFixed(2);
-  }
-  
+  if (currency === 'USD') return val.toFixed(2);
+  if (currency === 'UAH') return (val * usdRate).toFixed(2);
   if (currency === 'EUR') {
-      // USD -> EUR (через гривну: USD * KursUSD / KursEUR)
-      // Пример: 100$ * 41.5 / 43.5 = 95.4 EUR
       if (eurRate === 0) return '0.00';
       return ((val * usdRate) / eurRate).toFixed(2);
   }
-
   return val.toFixed(2);
 };
 
 export const convertToUSD = (amount, currency, rates) => {
   const val = parseFloat(amount);
   if (isNaN(val)) return 0;
-  
   const code = currency ? currency.toUpperCase() : 'USD';
   const usdRate = Number(rates?.usd) || 1;
   const eurRate = Number(rates?.eur) || 1;
 
   if (code === 'USD') return val;
   if (code === 'UAH') return val / usdRate;
-  if (code === 'EUR') return (val * eurRate) / usdRate; // EUR -> UAH -> USD
-  
+  if (code === 'EUR') return (val * eurRate) / usdRate;
   return val;
 };
 
@@ -103,10 +83,6 @@ export async function exportSingleOrderXLSX(order, client, settings) {
         const rates = settings?.exchangeRates;
 
         const items = order.items || [];
-        // ВНИМАНИЕ: Мы используем convertPrice, чтобы в Excel попадали цены в выбранной валюте
-        // Но для правильного итога нужно сначала конвертировать, потом суммировать?
-        // Или суммировать в USD и конвертировать итог? Надежнее второе.
-        
         const grossTotalUSD = items.reduce((acc, item) => acc + (item.price * item.qty), 0);
         const totalPairDiscountUSD = items.reduce((acc, item) => acc + ((item.discountPerPair || 0) * item.qty), 0);
         const lumpDiscountUSD = parseFloat(order.lumpDiscount) || 0;

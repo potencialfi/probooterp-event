@@ -5,7 +5,6 @@ import { IMG_URL } from '../api';
 import { convertPrice } from '../utils';
 
 const InvoicePreview = ({ order, settings, onBack }) => {
-    // Защита от белого экрана: если заказа нет, ничего не рендерим
     if (!order) return null;
 
     const mainCurrency = settings?.mainCurrency || 'USD';
@@ -19,36 +18,24 @@ const InvoicePreview = ({ order, settings, onBack }) => {
     const timeStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     
     // Форматирование номера заказа
-    const rawId = String(order.orderId || order.id || '');
-    // Если это длинный timestamp, обрезаем, иначе показываем как есть (для красивых ID 1, 2, 3)
-    const displayId = rawId.length > 10 ? rawId.slice(-6) : rawId;
+    const displayId = order.orderId ? String(order.orderId) : String(order.id || '');
 
     const handlePrint = () => window.print();
 
     // --- РАСЧЕТЫ ---
     const items = order.items || [];
     
-    // 1. Грязная сумма
     const grossTotalUSD = items.reduce((acc, item) => acc + (item.price * item.qty), 0);
-    
-    // 2. Скидка на пары
     const totalPairDiscountUSD = items.reduce((acc, item) => acc + ((item.discountPerPair || 0) * item.qty), 0);
-    
-    // 3. Скидка на заказ
     const lumpDiscountUSD = parseFloat(order.lumpDiscount) || 0;
-    
-    // 4. Общая скидка
     const totalDiscountUSD = totalPairDiscountUSD + lumpDiscountUSD;
     
-    // 5. Итого к оплате
     const netTotalUSD = Math.max(0, grossTotalUSD - totalDiscountUSD);
 
-    // 6. Оплата и Остаток
     const payment = order.payment || {};
     const prepaymentOriginal = payment.originalAmount || 0;
     const prepaymentCurrency = payment.originalCurrency || mainCurrency;
     
-    // Для расчета остатка берем эквивалент в USD
     let prepaymentInUSD = payment.prepaymentInUSD;
     if (prepaymentInUSD === undefined && prepaymentOriginal > 0) {
         if (prepaymentCurrency === 'USD') prepaymentInUSD = prepaymentOriginal;
@@ -61,7 +48,6 @@ const InvoicePreview = ({ order, settings, onBack }) => {
     const hasPrepayment = prepaymentOriginal > 0;
     const showSubtotal = hasDiscount || hasPrepayment;
 
-    // Форматирование размеров
     const formatSizes = (sizes) => {
         if (!sizes) return '';
         if (typeof sizes === 'string') return sizes;
@@ -69,12 +55,11 @@ const InvoicePreview = ({ order, settings, onBack }) => {
             .filter(([_, q]) => q > 0)
             .sort(([a], [b]) => Number(a) - Number(b))
             .map(([s, q]) => `${s}(${q})`)
-            .join(', '); // Разделитель запятая с пробелом
+            .join(', ');
     };
 
     return (
         <div className="flex flex-col h-full bg-gray-100">
-            {/* Панель управления */}
             <div className="bg-white border-b border-gray-200 p-4 flex justify-between items-center print:hidden">
                 <div className="flex items-center gap-4">
                     <h2 className="text-xl font-bold text-gray-800">Предпросмотр накладной</h2>
@@ -85,12 +70,10 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                 </div>
             </div>
 
-            {/* Лист А4 */}
             <div className="flex-1 overflow-auto p-8 custom-scrollbar print:p-0 print:overflow-visible">
                 <div className="bg-white max-w-[210mm] min-h-[297mm] mx-auto p-8 shadow-lg print:shadow-none print:m-0 print:w-full print:h-auto print:min-h-0 flex flex-col justify-between" id="invoice">
                     
                     <div>
-                        {/* Шапка */}
                         <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-6">
                             <div>
                                 {brandLogo ? (
@@ -98,7 +81,6 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                                 ) : (
                                     <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2 uppercase">{brandName}</h1>
                                 )}
-                                
                                 <div className="space-y-0.5 text-sm">
                                     {brandPhones.map((phone, idx) => (
                                         <p key={idx} className="text-gray-600 font-medium">{phone}</p>
@@ -111,7 +93,6 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                             </div>
                         </div>
 
-                        {/* Инфо о клиенте */}
                         <div className="grid grid-cols-2 gap-8 mb-8 text-sm">
                             <div>
                                 <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider mb-1">Клиент</h3>
@@ -132,7 +113,6 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                             </div>
                         </div>
 
-                        {/* Таблица товаров */}
                         <table className="w-full text-left text-xs mb-6">
                             <thead>
                                 <tr className="border-b-2 border-gray-800 text-gray-600 uppercase tracking-wider">
@@ -148,7 +128,7 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                                     <tr key={idx}>
                                         <td className="py-2 align-top pr-2">
                                             <div className="font-bold text-gray-900 leading-tight">
-                                                {item.sku}<span className="font-normal text-gray-500">/{item.color}</span>
+                                                {item.sku}<span className="font-normal text-gray-500"> / {item.color}</span>
                                             </div>
                                             {item.discountPerPair > 0 && <div className="text-[10px] text-green-600 mt-0.5">Скидка: -{convertPrice(item.discountPerPair, mainCurrency, exchangeRates)} {mainCurrency}/пара</div>}
                                         </td>
@@ -167,16 +147,16 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                             </tbody>
                         </table>
 
-                        {/* Блок Итогов (Исправленная верстка) */}
+                        {/* БЛОК ИТОГОВ */}
                         <div className="flex justify-between items-end mt-4 pt-4 border-t border-gray-100 text-sm">
                             
-                            {/* ЛЕВАЯ ЧАСТЬ: Сумма, Скидка, Оплата (в одну строку) */}
+                            {/* ЛЕВАЯ ЧАСТЬ: В одну строку */}
                             <div className="flex flex-wrap gap-6 items-center text-gray-600">
                                 {/* Сумма */}
                                 {showSubtotal && (
                                     <div className="flex gap-2 items-center">
                                         <span className="text-gray-400 font-medium">Сумма:</span>
-                                        <span className="font-medium text-gray-900">{convertPrice(grossTotalUSD, mainCurrency, exchangeRates)} {mainCurrency}</span>
+                                        <span className="text-gray-900 font-bold">{convertPrice(grossTotalUSD, mainCurrency, exchangeRates)} {mainCurrency}</span>
                                     </div>
                                 )}
                                 
@@ -197,7 +177,7 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                                 )}
                             </div>
 
-                            {/* ПРАВАЯ ЧАСТЬ: ИТОГ или ОСТАТОК */}
+                            {/* ПРАВАЯ ЧАСТЬ: ИТОГ/ОСТАТОК */}
                             <div className="text-right pl-4">
                                 <div className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">
                                     {hasPrepayment ? 'Остаток' : 'Итого'}
@@ -206,9 +186,10 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                                     {convertPrice(remainingUSD, mainCurrency, exchangeRates)} {mainCurrency}
                                 </div>
                             </div>
+
                         </div>
 
-                        {/* Поля для подписей */}
+                        {/* Подписи */}
                         {hasPrepayment && (
                             <div className="grid grid-cols-2 gap-16 mt-16 mb-8">
                                 <div><div className="border-b border-gray-400 mb-1"></div><div className="text-center text-[10px] text-gray-400 uppercase tracking-wide">Представитель бренда</div></div>
@@ -217,7 +198,6 @@ const InvoicePreview = ({ order, settings, onBack }) => {
                         )}
                     </div>
                     
-                    {/* Footer */}
                     <div className="mt-auto">
                         <div className="text-center text-gray-800 font-medium text-sm mb-4">Спасибо за ваш заказ!</div>
                         <div className="pt-4 border-t border-gray-200 flex justify-between items-center text-[10px] text-gray-400">
