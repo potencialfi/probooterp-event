@@ -6,42 +6,42 @@ export const Button = ({ children, onClick, variant = 'primary', size = 'md', ic
   const variantClass = `btn-${variant}`;
   const sizeClass = `btn-${size}`;
   return (
-    <button onClick={disabled ? undefined : onClick} className={`btn-base ${variantClass} ${sizeClass} ${className}`} disabled={disabled} {...props}>
-      {disabled ? <Loader2 className="animate-spin" size={18}/> : Icon && <Icon size={18} strokeWidth={2.5} />}
+    <button onClick={disabled ? undefined : onClick} className={`btn ${variantClass} ${sizeClass} ${className}`} disabled={disabled} {...props}>
+      {disabled ? <Loader2 className="animate-spin" /> : Icon && <Icon strokeWidth={2.5} />}
       {children}
     </button>
   );
 };
 
 export const Input = ({ label, icon: Icon, className = '', ...props }) => (
-  <div className="w-full">
-    {label && <label className="ui-label">{label}</label>}
-    <div className="relative">
-      {Icon && <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />}
-      <input className={`ui-input ${Icon ? 'pl-11' : ''} ${className}`} {...props} />
+  <div className="input-wrapper">
+    {label && <label className="text-label">{label}</label>}
+    <div className="input-container">
+      {Icon && <Icon className="input-icon" />}
+      <input className={`input-field ${Icon ? 'pl-10' : ''} ${className}`} {...props} />
     </div>
   </div>
 );
 
 export const Select = ({ label, children, className = '', ...props }) => (
-  <div className="w-full">
-    {label && <label className="ui-label">{label}</label>}
-    <div className="relative">
-      <select className={`ui-input appearance-none cursor-pointer ${className}`} {...props}>
+  <div className="input-wrapper">
+    {label && <label className="text-label">{label}</label>}
+    <div className="input-container">
+      <select className={`input-field appearance-none cursor-pointer ${className}`} {...props}>
         {children}
       </select>
-      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▼</div>
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▼</div>
     </div>
   </div>
 );
 
 export const PageHeader = ({ title, subtitle, children }) => (
-  <div className="bg-white px-6 py-5 rounded-2xl shadow-sm border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
-    <div>
-      <h1 className="page-title">{title}</h1>
-      {subtitle && <p className="page-subtitle">{subtitle}</p>}
+  <div className="page-header-card">
+    <div className="page-header-group">
+      <h1 className="text-h1">{title}</h1>
+      {subtitle && <p className="text-subtitle">{subtitle}</p>}
     </div>
-    <div className="flex gap-2">{children}</div>
+    <div className="page-header-actions">{children}</div>
   </div>
 );
 
@@ -49,13 +49,13 @@ export const Modal = ({ isOpen, onClose, title, children, footer }) => {
   if (!isOpen) return null;
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors"><X size={20}/></button>
+      <div className="modal-wrapper" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">{title}</h3>
+          <button onClick={onClose} className="modal-close"><X/></button>
         </div>
-        <div className="p-6 overflow-y-auto max-h-[80vh] custom-scrollbar">{children}</div>
-        {footer && <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">{footer}</div>}
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
       </div>
     </div>,
     document.body
@@ -66,19 +66,19 @@ export const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   if (totalPages <= 1) return null;
   return (
     <div className="flex justify-center items-center gap-3 py-4 shrink-0">
-      <button onClick={() => onPageChange(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-50"><ChevronLeft size={18}/></button>
+      <button onClick={() => onPageChange(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-50"><ChevronLeft/></button>
       <span className="font-medium text-gray-600 text-sm">Стр. {currentPage} из {totalPages}</span>
-      <button onClick={() => onPageChange(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-50"><ChevronRight size={18}/></button>
+      <button onClick={() => onPageChange(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-50"><ChevronRight/></button>
     </div>
   );
 };
 
 export const Toast = ({ message, type = 'success', onClose }) => {
   return createPortal(
-    <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-3 rounded-xl shadow-xl animate-slide-down border-2 ${type === 'error' ? 'bg-white border-red-100 text-red-700' : 'bg-white border-gray-100 text-gray-800'}`}>
-        {type === 'success' ? <div className="bg-green-100 p-1.5 rounded-full text-green-600"><Check size={16}/></div> : <div className="bg-red-100 p-1.5 rounded-full text-red-600"><AlertCircle size={16}/></div>}
+    <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl animate-slide-down border-2 ${type === 'error' ? 'bg-white border-red-100 text-red-700' : 'bg-white border-gray-100 text-gray-800'}`}>
+        {type === 'success' ? <div className="bg-green-100 p-1.5 rounded-full text-green-600"><Check className="w-4 h-4"/></div> : <div className="bg-red-100 p-1.5 rounded-full text-red-600"><AlertCircle className="w-4 h-4"/></div>}
         <span className="font-bold text-sm">{message}</span>
-        <button onClick={onClose} className="opacity-50 hover:opacity-100 ml-2"><X size={18}/></button>
+        <button onClick={onClose} className="opacity-50 hover:opacity-100 ml-2"><X className="w-5 h-5"/></button>
     </div>,
     document.body
   );

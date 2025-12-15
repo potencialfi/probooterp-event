@@ -30,35 +30,35 @@ const OrdersPage = ({ orders, setOrders, clients, settings, triggerToast, onEdit
   return (
     <div className="page-container">
       <PageHeader title="История заказов" subtitle={`Всего: ${orders.length}`}>
-         <div className="relative w-full md:w-80"><Search className="absolute left-3 top-3.5 text-gray-400" size={20} /><input className="ui-input pl-10" placeholder="Поиск..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+         <div className="search-wrapper"><Search className="search-icon" /><input className="search-input" placeholder="Поиск..." value={search} onChange={e => setSearch(e.target.value)} /></div>
       </PageHeader>
 
-      <div className="ui-table-wrapper flex-1">
-        <div className="overflow-auto custom-scrollbar flex-1">
-        <table className="ui-table">
-            <thead><tr><th className="ui-th pl-8 w-24">№</th><th className="ui-th w-32">Дата</th><th className="ui-th">Клиент</th><th className="ui-th w-40">Телефон</th><th className="ui-th text-center w-24">Пар</th><th className="ui-th text-right w-32">Сумма</th><th className="ui-th pr-8 text-right w-40"></th></tr></thead>
+      <div className="table-card">
+        <div className="table-scroll-area">
+        <table className="data-table">
+            <thead><tr><th className="th-base col-id">№</th><th className="th-base col-date">Дата</th><th className="th-base">Клиент</th><th className="th-base col-phone">Телефон</th><th className="th-base col-stat">Пар</th><th className="th-base col-money">Сумма</th><th className="th-base col-action"></th></tr></thead>
             <tbody>
             {paginatedOrders.map(o => {
                 const client = clients.find(c => c.id === o.clientId);
                 return (
-                <tr key={o.id} className="ui-tr">
-                    <td className="ui-td pl-8"><span className="ui-text-code">#{o.orderId || o.id}</span></td>
-                    <td className="ui-td"><span className="ui-text-secondary">{new Date(o.date).toLocaleDateString()}</span></td>
-                    <td className="ui-td font-bold text-gray-900">{client?.name || 'Удален'}</td>
-                    <td className="ui-td"><span className="ui-text-code">{client?.phone || '-'}</span></td>
-                    <td className="ui-td text-center"><span className="ui-badge ui-badge-neutral">{o.items.reduce((a,i)=>a+i.qty,0)}</span></td>
-                    <td className="ui-td text-right"><span className="ui-text-money">{convertPrice(o.total, mainCurrency, settings.exchangeRates)} {mainCurrency}</span></td>
-                    <td className="ui-td pr-8 text-right">
-                        <div className="ui-actions-group">
-                            <Button onClick={() => setViewId(o.id)} variant="secondary" icon={Eye} className="w-9 h-9 px-0"/>
-                            <Button onClick={() => handleDownload(o)} variant="secondary" icon={Download} className="w-9 h-9 px-0"/>
-                            <Button onClick={() => onEdit(o)} variant="primary" icon={Edit} className="w-9 h-9 px-0"/>
-                            <Button onClick={() => setDeleteId(o.id)} variant="danger" icon={Trash2} className="w-9 h-9 px-0"/>
+                <tr key={o.id} className="tr-row">
+                    <td className="td-id">#{o.orderId || o.id}</td>
+                    <td className="td-date">{new Date(o.date).toLocaleDateString()}</td>
+                    <td className="td-title">{client?.name || 'Удален'}</td>
+                    <td className="td-mono">{client?.phone || '-'}</td>
+                    <td className="td-center"><span className="badge badge-neutral">{o.items.reduce((a,i)=>a+i.qty,0)}</span></td>
+                    <td className="td-money">{convertPrice(o.total, mainCurrency, settings.exchangeRates)} {mainCurrency}</td>
+                    <td className="td-actions">
+                        <div className="actions-group">
+                            <button onClick={() => setViewId(o.id)} className="btn-action-secondary"><Eye/></button>
+                            <button onClick={() => handleDownload(o)} className="btn-action-secondary"><Download/></button>
+                            <button onClick={() => onEdit(o)} className="btn-action-primary"><Edit/></button>
+                            <button onClick={() => setDeleteId(o.id)} className="btn-action-danger"><Trash2/></button>
                         </div>
                     </td>
                 </tr>
             )})}
-            {filteredOrders.length === 0 && <tr><td colSpan="7" className="p-10 text-center text-gray-400 text-lg">Нет заказов</td></tr>}
+            {filteredOrders.length === 0 && <tr><td colSpan="7" className="td-empty">Нет заказов</td></tr>}
             </tbody>
         </table>
         </div>

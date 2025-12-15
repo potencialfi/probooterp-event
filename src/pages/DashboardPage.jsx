@@ -42,60 +42,60 @@ const DashboardPage = ({ orders = [], clients = [], setActiveTab, settings }) =>
 
   return (
     <div className="page-container">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-200 shrink-0">
-         <div><h1 className="page-title">Главная</h1><p className="page-subtitle">Сегодня {new Date().toLocaleDateString()}</p></div>
-         <div className="flex gap-4">
-             <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-                <button onClick={() => setShowStats(true)} className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${showStats ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}><Eye size={16}/> Показать</button>
-                <button onClick={() => setShowStats(false)} className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${!showStats ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}><EyeOff size={16}/> Скрыть</button>
+      <div className="page-header-card">
+         <div className="page-header-group"><h1 className="text-h1">Главная</h1><p className="text-subtitle">Сегодня {new Date().toLocaleDateString()}</p></div>
+         <div className="page-header-actions">
+             <div className="toggle-wrapper">
+                <button onClick={() => setShowStats(true)} className={`toggle-btn ${showStats ? 'toggle-btn-active' : 'toggle-btn-inactive'}`}><Eye/> Показать</button>
+                <button onClick={() => setShowStats(false)} className={`toggle-btn ${!showStats ? 'toggle-btn-active' : 'toggle-btn-inactive'}`}><EyeOff/> Скрыть</button>
              </div>
              <Button onClick={() => setActiveTab('newOrder')} variant="success" size="md" icon={Plus}>Новый заказ</Button>
          </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="dashboard-grid">
         <div className="stat-card">
-            <div className="stat-label"><ShoppingBag size={18}/> Всего заказов</div>
-            <div className="stat-value val-xl">{displayValue(stats.totalOrders)}</div>
-            <div className="stat-icon-bg text-gray-400"><ShoppingBag size={80}/></div>
+            <div className="stat-header st-neutral"><ShoppingBag/> Всего заказов</div>
+            <div className="stat-val-xl">{displayValue(stats.totalOrders)}</div>
+            <div className="bg-st-neutral"><ShoppingBag/></div>
         </div>
         <div className="stat-card">
-            <div className="stat-label text-indigo-500"><Footprints size={18}/> Продано пар</div>
-            <div className="stat-value val-xl">{displayValue(stats.totalPairs)}</div>
-            <div className="stat-icon-bg text-indigo-400"><Footprints size={80}/></div>
+            <div className="stat-header st-indigo"><Footprints/> Продано пар</div>
+            <div className="stat-val-xl">{displayValue(stats.totalPairs)}</div>
+            <div className="bg-st-indigo"><Footprints/></div>
         </div>
         <div className="stat-card">
-            <div className="stat-label text-green-600"><Wallet size={18}/> Общая выручка</div>
-            <div className="z-10"><div className="stat-value val-lg">{displayValue(stats.totalSumUSD, 'money')}</div><div className="ui-text-secondary mt-1">Ср. чек: {displayValue(stats.avgCheckUSD, 'money')}</div></div>
-            <div className="stat-icon-bg text-green-400"><Wallet size={80}/></div>
+            <div className="stat-header st-green"><Wallet/> Общая выручка</div>
+            <div className="z-10"><div className="stat-val-lg">{displayValue(stats.totalSumUSD, 'money')}</div><div className="stat-subtext">Ср. чек: {displayValue(stats.avgCheckUSD, 'money')}</div></div>
+            <div className="bg-st-green"><Wallet/></div>
         </div>
         <div className="stat-card">
-            <div className="stat-label text-blue-600"><CreditCard size={18}/> Предоплата</div>
-            <div className="z-10"><div className="stat-value val-md">{displayValue(totalPrepaymentInMain, 'money')}</div>{showStats && (<div className="flex gap-2 mt-1 text-[10px] font-bold text-gray-400">{stats.prepayments.USD > 0 && <span>${stats.prepayments.USD}</span>}{stats.prepayments.EUR > 0 && <span>€{stats.prepayments.EUR}</span>}{stats.prepayments.UAH > 0 && <span>₴{stats.prepayments.UAH}</span>}</div>)}</div>
-            <div className="stat-icon-bg text-blue-400"><CreditCard size={80}/></div>
+            <div className="stat-header st-blue"><CreditCard/> Предоплата</div>
+            <div className="z-10"><div className="stat-val-md">{displayValue(totalPrepaymentInMain, 'money')}</div>{showStats && (<div className="stat-code-group">{stats.prepayments.USD > 0 && <span>${stats.prepayments.USD}</span>}{stats.prepayments.EUR > 0 && <span>€{stats.prepayments.EUR}</span>}{stats.prepayments.UAH > 0 && <span>₴{stats.prepayments.UAH}</span>}</div>)}</div>
+            <div className="bg-st-blue"><CreditCard/></div>
         </div>
       </div>
 
-      <div className="ui-table-wrapper flex-1">
-        <div className="p-5 border-b border-gray-100 flex justify-between items-center"><h3 className="section-title mb-0 border-0 pb-0">Последние заказы</h3><button onClick={() => setActiveTab('history')} className="text-blue-600 text-sm font-bold hover:underline flex items-center gap-1">Все заказы <ArrowRight size={16}/></button></div>
-        <div className="overflow-auto custom-scrollbar flex-1">
-          <table className="ui-table">
-            <thead><tr><th className="ui-th pl-6 w-24">ID</th><th className="ui-th w-32">Дата</th><th className="ui-th">Клиент</th><th className="ui-th text-center w-24">Пар</th><th className="ui-th text-right w-36">Сумма</th><th className="ui-th pr-6 text-right w-24"></th></tr></thead>
+      <div className="table-card">
+        <div className="table-header"><h3 className="section-title-clean">Последние заказы</h3><button onClick={() => setActiveTab('history')} className="link-action">Все заказы <ArrowRight/></button></div>
+        <div className="table-scroll-area">
+          <table className="data-table">
+            <thead><tr><th className="th-base col-id">ID</th><th className="th-base col-date">Дата</th><th className="th-base">Клиент</th><th className="th-base col-stat">Пар</th><th className="th-base col-money">Сумма</th><th className="th-base col-action"></th></tr></thead>
             <tbody>
               {recentOrders.map(o => {
                 const client = clients.find(c => c.id === o.clientId);
                 return (
-                  <tr key={o.id} className="ui-tr">
-                    <td className="ui-td pl-6"><span className="ui-text-code">#{o.orderId || o.id}</span></td>
-                    <td className="ui-td"><span className="ui-text-secondary">{new Date(o.date).toLocaleDateString()}</span></td>
-                    <td className="ui-td font-bold text-gray-900">{client?.name || 'Удален'}</td>
-                    <td className="ui-td text-center"><span className="ui-badge ui-badge-neutral">{o.items.reduce((a,i)=>a+i.qty,0)}</span></td>
-                    <td className="ui-td text-right"><span className="ui-text-money">{showStats ? `${convertPrice(o.total, mainCurrency, settings.exchangeRates)} ${mainCurrency}` : '*****'}</span></td>
-                    <td className="ui-td pr-6 text-right"><div className="ui-actions-group"><button onClick={() => setActiveTab('history')} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={18}/></button></div></td>
+                  <tr key={o.id} className="tr-row">
+                    <td className="td-id">#{o.orderId || o.id}</td>
+                    <td className="td-date">{new Date(o.date).toLocaleDateString()}</td>
+                    <td className="td-title">{client?.name || 'Удален'}</td>
+                    <td className="td-center"><span className="badge badge-neutral">{o.items.reduce((a,i)=>a+i.qty,0)}</span></td>
+                    <td className="td-money">{showStats ? `${convertPrice(o.total, mainCurrency, settings.exchangeRates)} ${mainCurrency}` : '*****'}</td>
+                    <td className="td-actions"><div className="actions-group"><button onClick={() => setActiveTab('history')} className="btn-action-primary"><Edit/></button></div></td>
                   </tr>
                 );
               })}
-              {recentOrders.length === 0 && <tr><td colSpan="6" className="p-10 text-center text-gray-400">Нет заказов</td></tr>}
+              {recentOrders.length === 0 && <tr><td colSpan="6" className="td-empty">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>

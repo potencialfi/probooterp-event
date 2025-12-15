@@ -18,136 +18,150 @@ html, body, #root {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
 
 @layer components {
-  /* --- 1. КОНТЕЙНЕРЫ --- */
-  .page-container {
-    @apply h-full flex flex-col p-6 gap-6 overflow-hidden bg-slate-50 animate-fade-in;
-  }
-
-  .ui-card {
-    @apply bg-white p-5 rounded-2xl shadow-sm border border-gray-200;
-  }
+  /* --- 1. ГЛОБАЛЬНЫЕ КОНТЕЙНЕРЫ --- */
+  .page-container { @apply h-full flex flex-col p-6 gap-6 overflow-hidden bg-slate-50 animate-fade-in; }
+  .page-header-card { @apply bg-white p-5 rounded-2xl shadow-sm border border-gray-200 shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4; }
+  .page-header-group { @apply flex flex-col; }
+  .page-header-actions { @apply flex gap-4 items-center; }
 
   /* --- 2. ТИПОГРАФИКА --- */
-  .page-title {
-    @apply text-3xl font-bold text-gray-900 tracking-tight;
+  .text-h1 { @apply text-3xl font-bold text-gray-900 tracking-tight; }
+  .text-subtitle { @apply text-sm text-gray-500 font-medium mt-1; }
+  .text-label { @apply block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1; }
+  
+  /* Ссылки (Авто-размер иконки) */
+  .link-action { 
+    @apply text-blue-600 text-sm font-bold hover:underline flex items-center gap-1 cursor-pointer transition-colors; 
   }
-  .page-subtitle {
-    @apply text-sm text-gray-500 font-medium mt-1;
-  }
-  .section-title {
-    @apply text-base font-bold text-gray-800 flex items-center gap-2 mb-4 pb-2 border-b border-gray-100 uppercase tracking-wide;
-  }
-  .ui-label {
-    @apply block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1;
-  }
+  .link-action svg { @apply w-4 h-4; } /* <--- АВТОМАТИЧЕСКИЙ РАЗМЕР */
 
-  /* --- 3. ТЕКСТОВЫЕ УТИЛИТЫ (НОВОЕ) --- */
-  .ui-text-money {
-    @apply font-bold text-emerald-600 font-mono tracking-tight;
-  }
-  .ui-text-secondary {
-    @apply text-gray-500 text-sm font-medium;
-  }
-  .ui-text-code {
-    @apply font-mono text-xs text-gray-500;
-  }
+  .section-header { @apply flex justify-between items-center border-b border-gray-100 pb-3 mb-4; }
+  .section-title { @apply text-base font-bold text-gray-800 flex items-center gap-2 uppercase tracking-wide; }
+  .section-title-clean { @apply text-base font-bold text-gray-800 flex items-center gap-2 uppercase tracking-wide mb-0 pb-0 border-0; }
 
-  /* --- 4. БЕЙДЖИ (НОВОЕ) --- */
-  .ui-badge {
-    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide uppercase whitespace-nowrap;
-  }
-  .ui-badge-neutral { @apply bg-gray-100 text-gray-600; }
-  .ui-badge-success { @apply bg-emerald-50 text-emerald-700 border border-emerald-100; }
-  .ui-badge-primary { @apply bg-blue-50 text-blue-700 border border-blue-100; }
-  .ui-badge-danger  { @apply bg-red-50 text-red-700 border border-red-100; }
-  .ui-badge-warning { @apply bg-amber-50 text-amber-700 border border-amber-100; }
-
-  /* --- 5. УВЕДОМЛЕНИЯ / АЛЕРТЫ (НОВОЕ) --- */
-  .ui-alert {
-    @apply px-4 py-3 rounded-xl flex items-center gap-3 text-sm font-medium border;
-  }
-  .ui-alert-info { @apply bg-blue-50 text-blue-700 border-blue-100; }
-  .ui-alert-danger { @apply bg-red-50 text-red-700 border-red-100; }
-  .ui-alert-warning { @apply bg-amber-50 text-amber-800 border-amber-100; }
-
-  /* --- 6. ИНПУТЫ И КНОПКИ --- */
-  .ui-input {
+  /* --- 3. ИНПУТЫ --- */
+  .input-wrapper { @apply w-full; }
+  .input-container { @apply relative; }
+  .input-field {
     @apply w-full bg-white border border-gray-300 text-gray-900 text-sm font-medium 
            rounded-xl px-4 outline-none transition-all h-11
            focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 
            placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-400;
   }
-  .btn-base {
+  .input-with-icon { @apply input-field pl-10; }
+  
+  /* Поиск (Авто-размер иконки) */
+  .search-wrapper { @apply relative w-full md:w-80; }
+  .search-icon { @apply absolute left-3 top-3.5 text-gray-400 pointer-events-none w-5 h-5; }
+  .search-input { @apply input-field pl-10; }
+
+  /* --- 4. КНОПКИ --- */
+  .btn {
     @apply inline-flex items-center justify-center gap-2 font-bold transition-all 
            active:scale-95 disabled:opacity-60 disabled:pointer-events-none rounded-xl h-11 text-sm shadow-sm;
   }
-  .btn-sm { @apply h-9 px-3 text-xs; }
-  .btn-md { @apply h-11 px-5; }
-  .btn-lg { @apply h-12 px-8 text-base; }
+  .btn svg { @apply w-5 h-5; } /* Иконки в кнопках всегда 20px */
+  
+  /* Варианты кнопок */
   .btn-primary { @apply bg-blue-600 text-white border border-blue-600 hover:bg-blue-700 shadow-blue-100; }
   .btn-success { @apply bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 shadow-emerald-100; }
   .btn-danger { @apply bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 shadow-red-50; }
   .btn-secondary { @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50; }
+  .btn-icon-only { @apply w-10 h-10 px-0; }
 
-  /* --- 7. ТАБЛИЦЫ --- */
-  .ui-table-wrapper {
-    @apply ui-card p-0 overflow-hidden flex flex-col;
-  }
-  .ui-table {
-    @apply w-full text-left border-collapse text-sm;
-  }
-  .ui-th {
-    @apply px-5 py-4 bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider font-bold border-b border-gray-200 sticky top-0 z-10;
-  }
-  .ui-td {
-    @apply px-5 py-3.5 border-b border-gray-100 text-gray-700 font-medium align-middle;
-  }
-  .ui-tr {
-    @apply hover:bg-blue-50/30 transition-colors cursor-default;
-  }
-  .ui-tr:last-child .ui-td { border-bottom: none; }
-  .ui-actions-group {
-    @apply flex justify-end gap-2 opacity-0 transition-opacity;
-  }
-  .ui-tr:hover .ui-actions-group { opacity: 1; }
+  /* Кнопки действий в таблице (Action Buttons) */
+  .btn-action-base { @apply p-2 rounded-lg transition-colors duration-200; }
+  .btn-action-base svg { @apply w-5 h-5; } /* Авто-размер */
+  
+  .btn-action-primary { @apply btn-action-base text-blue-600 hover:bg-blue-50; }
+  .btn-action-secondary { @apply btn-action-base text-gray-500 hover:bg-gray-100; }
+  .btn-action-danger { @apply btn-action-base text-gray-400 hover:text-red-600 hover:bg-red-50; }
+  .btn-action-clear { @apply text-gray-400 hover:text-red-500 text-xs flex items-center gap-1 font-bold bg-transparent hover:bg-gray-50 px-2 py-1 rounded transition-colors; }
+  .btn-action-clear svg { @apply w-3.5 h-3.5; }
 
-  /* --- 8. ИНТЕРАКТИВНЫЕ ЭЛЕМЕНТЫ (НОВОЕ) --- */
-  /* Карточка выбора (для сеток, типов ящиков, списка товаров) */
-  .ui-selectable-card {
-    @apply bg-white p-4 rounded-xl border-2 transition-all cursor-pointer relative hover:shadow-md flex flex-col items-center justify-center;
-  }
-  .ui-selectable-card-active { @apply border-blue-500 bg-blue-50/50 ring-1 ring-blue-500; }
-  .ui-selectable-card-inactive { @apply border-gray-200 hover:border-blue-300 hover:bg-gray-50; }
+  /* Переключатели (Toggle) */
+  .toggle-wrapper { @apply flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200; }
+  .toggle-btn { @apply px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all; }
+  .toggle-btn svg { @apply w-4 h-4; } /* Авто-размер */
+  .toggle-btn-active { @apply bg-white text-blue-600 shadow-sm; }
+  .toggle-btn-inactive { @apply text-gray-400 hover:text-gray-600; }
 
-  /* Элемент списка (в корзине) */
-  .ui-list-item {
-    @apply bg-white p-4 rounded-xl border border-gray-200 transition-all hover:border-blue-300 hover:shadow-sm cursor-pointer flex justify-between items-center;
-  }
+  /* --- 5. ТАБЛИЦЫ --- */
+  .table-card { @apply bg-white p-0 rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0; }
+  .table-header { @apply p-5 border-b border-gray-100 flex justify-between items-center bg-white; }
+  .table-scroll-area { @apply flex-1 overflow-auto custom-scrollbar; }
+  .data-table { @apply w-full text-left border-collapse text-sm; }
+  
+  .th-base { @apply px-5 py-4 bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider font-bold border-b border-gray-200 sticky top-0 z-10; }
+  .td-base { @apply px-5 py-3.5 border-b border-gray-100 text-gray-700 font-medium align-middle; }
+  .tr-row { @apply hover:bg-blue-50/30 transition-colors cursor-default; }
+  .tr-row:last-child [class^="td-"] { border-bottom: none; }
+  
+  /* Колонки и ячейки */
+  .col-id { @apply w-24 pl-8; }
+  .col-date { @apply w-32; }
+  .col-phone { @apply w-40; }
+  .col-stat { @apply w-24 text-center; }
+  .col-money { @apply w-36 text-right; }
+  .col-action { @apply w-32 pr-8 text-right; }
 
-  /* --- 9. DASHBOARD --- */
-  .stat-card {
-    @apply ui-card flex flex-col justify-between h-32 relative overflow-hidden;
-  }
-  .stat-label {
-    @apply flex items-center gap-2 text-gray-500 font-bold text-xs uppercase tracking-wide z-10;
-  }
-  .stat-value {
-    @apply font-black text-gray-800 z-10;
-  }
-  .val-xl { @apply text-4xl; } 
-  .val-lg { @apply text-3xl; } 
-  .val-md { @apply text-2xl; }
-  .stat-icon-bg {
-    @apply absolute -right-4 -bottom-4 opacity-10 pointer-events-none;
-  }
+  .td-id { @apply td-base pl-8 font-mono text-gray-500 text-xs; }
+  .td-date { @apply td-base text-gray-500 text-xs; }
+  .td-title { @apply td-base font-bold text-gray-900; }
+  .td-mono { @apply td-base font-mono text-xs text-gray-500; }
+  .td-center { @apply td-base text-center; }
+  .td-money { @apply td-base text-right font-bold text-emerald-600 font-mono tracking-tight; }
+  .td-actions { @apply td-base pr-8 text-right; }
+  .td-empty { @apply td-base text-center p-10 text-gray-400 text-lg; }
 
-  /* --- 10. МОДАЛКИ --- */
-  .modal-overlay {
-    @apply fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md animate-fade-in;
-  }
-  .modal-content {
-    @apply bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-slide-up ring-1 ring-gray-200;
-  }
+  .actions-group { @apply flex justify-end gap-2 opacity-0 transition-opacity; }
+  .tr-row:hover .actions-group { opacity: 1; }
+
+  /* --- 6. ДАШБОРД --- */
+  .dashboard-grid { @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5; }
+  .stat-card { @apply bg-white p-5 rounded-2xl shadow-sm border border-gray-200 flex flex-col justify-between h-32 relative overflow-hidden; }
+  .stat-header { @apply flex items-center gap-2 font-bold text-xs uppercase tracking-wide z-10; }
+  .stat-header svg { @apply w-5 h-5; } /* Авто-размер */
+  
+  .stat-val-xl { @apply font-black text-gray-800 z-10 text-4xl; }
+  .stat-val-lg { @apply font-black text-gray-800 z-10 text-3xl; }
+  .stat-val-md { @apply font-black text-gray-800 z-10 text-2xl; }
+  .stat-subtext { @apply text-sm text-gray-500 font-medium mt-1; }
+  .stat-code-group { @apply flex gap-2 mt-1 text-xs text-gray-400 font-mono; }
+
+  .stat-bg-icon { @apply absolute -right-4 -bottom-4 opacity-10 pointer-events-none w-20 h-20; }
+  
+  .st-neutral { @apply text-gray-500; }
+  .bg-st-neutral { @apply stat-bg-icon text-gray-400; }
+  .st-indigo { @apply text-indigo-500; }
+  .bg-st-indigo { @apply stat-bg-icon text-indigo-400; }
+  .st-green { @apply text-emerald-600; }
+  .bg-st-green { @apply stat-bg-icon text-emerald-400; }
+  .st-blue { @apply text-blue-600; }
+  .bg-st-blue { @apply stat-bg-icon text-blue-400; }
+
+  /* --- 7. КОМПОНЕНТЫ ИНТЕРФЕЙСА --- */
+  .card { @apply bg-white p-5 rounded-2xl shadow-sm border border-gray-200; }
+  .grid-form { @apply grid grid-cols-1 md:grid-cols-12 gap-4 items-end; }
+  .col-3 { @apply md:col-span-3; } .col-4 { @apply md:col-span-4; } .col-2 { @apply md:col-span-2; } .col-6 { @apply md:col-span-6; } .col-12 { @apply md:col-span-12; }
+
+  .badge { @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide uppercase whitespace-nowrap; }
+  .badge-neutral { @apply bg-gray-100 text-gray-600; }
+  .badge-primary { @apply bg-blue-50 text-blue-700 border border-blue-100; }
+  .badge-success { @apply bg-emerald-50 text-emerald-700 border border-emerald-100; }
+
+  .alert-box { @apply flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl border border-blue-100 text-sm font-bold; }
+  .alert-box svg { @apply w-5 h-5 flex-shrink-0; }
+
+  /* --- 8. МОДАЛКИ --- */
+  .modal-overlay { @apply fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md animate-fade-in; }
+  .modal-wrapper { @apply bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-slide-up ring-1 ring-gray-200; }
+  .modal-header { @apply flex justify-between items-center px-6 py-5 border-b border-gray-100; }
+  .modal-title { @apply text-lg font-bold text-gray-800; }
+  .modal-close { @apply p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors cursor-pointer; }
+  .modal-close svg { @apply w-5 h-5; }
+  .modal-body { @apply p-5 overflow-y-auto max-h-[80vh] custom-scrollbar; }
+  .modal-footer { @apply px-5 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-2; }
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

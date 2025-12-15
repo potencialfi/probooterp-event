@@ -14,7 +14,7 @@ const ClientsPage = ({ clients, setClients, triggerToast, handleFileImport, load
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => { setCurrentPage(1); }, [search]);
-  const handleSave = async () => { /* ...logic... */ if (!currentClient.name || !currentClient.phone) { triggerToast("Заполните поля", 'error'); return; } try { if (currentClient.id) { const updated = await apiCall(`/clients/${currentClient.id}`, 'PUT', currentClient); setClients(clients.map(c => c.id === updated.id ? updated : c)); } else { const newClient = await apiCall('/clients', 'POST', currentClient); setClients([...clients, newClient]); } triggerToast("Сохранено"); setIsModalOpen(false); setCurrentClient({ name: '', phone: '', city: '' }); } catch(e) { triggerToast(e.message, 'error'); } };
+  const handleSave = async () => { if (!currentClient.name || !currentClient.phone) { triggerToast("Заполните поля", 'error'); return; } try { if (currentClient.id) { const updated = await apiCall(`/clients/${currentClient.id}`, 'PUT', currentClient); setClients(clients.map(c => c.id === updated.id ? updated : c)); } else { const newClient = await apiCall('/clients', 'POST', currentClient); setClients([...clients, newClient]); } triggerToast("Сохранено"); setIsModalOpen(false); setCurrentClient({ name: '', phone: '', city: '' }); } catch(e) { triggerToast(e.message, 'error'); } };
   const handleDelete = async () => { try { await apiCall(`/clients/${confirmDeleteId}`, 'DELETE'); setClients(clients.filter(c => c.id !== confirmDeleteId)); setConfirmDeleteId(null); triggerToast("Удалено"); } catch (e) { triggerToast("Ошибка", 'error'); } };
   const handleExport = () => handleExportExcel(filteredClients.map(c => ({ Имя: c.name, Телефон: c.phone, Город: c.city })), 'clients');
   
@@ -30,25 +30,25 @@ const ClientsPage = ({ clients, setClients, triggerToast, handleFileImport, load
           <label className="cursor-pointer"><input type="file" accept=".xlsx" onChange={(e) => handleFileImport(e, '/clients/import', loadAllData)} className="hidden" /><Button variant="secondary" icon={Upload} as="span">Импорт</Button></label>
       </PageHeader>
       <div className="ui-card space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-              <Input label="Имя" value={currentClient.name} onChange={e => setCurrentClient({...currentClient, name: e.target.value})}/>
-              <Input label="Город" value={currentClient.city} onChange={e => setCurrentClient({...currentClient, city: e.target.value})}/>
-              <Input label="Телефон" value={currentClient.phone} onChange={e => setCurrentClient({...currentClient, phone: e.target.value})}/>
-              <Button onClick={handleSave} icon={Plus} variant="success"></Button>
+          <div className="grid-form">
+              <div className="col-3"><Input label="Имя" value={currentClient.name} onChange={e => setCurrentClient({...currentClient, name: e.target.value})}/></div>
+              <div className="col-3"><Input label="Город" value={currentClient.city} onChange={e => setCurrentClient({...currentClient, city: e.target.value})}/></div>
+              <div className="col-4"><Input label="Телефон" value={currentClient.phone} onChange={e => setCurrentClient({...currentClient, phone: e.target.value})}/></div>
+              <div className="col-2"><Button onClick={handleSave} icon={Plus} variant="success" className="w-full"></Button></div>
           </div>
-          <div className="relative"><Search className="absolute left-3 top-3 text-gray-400" size={18} /><input className="ui-input pl-10" placeholder="Поиск..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+          <div className="search-wrapper"><Search className="search-icon" size={20} /><input className="search-input" placeholder="Поиск..." value={search} onChange={e => setSearch(e.target.value)} /></div>
       </div>
-      <div className="ui-table-wrapper flex-1">
-        <div className="overflow-auto custom-scrollbar flex-1">
-        <table className="ui-table">
-            <thead><tr><th className="ui-th pl-8 w-[30%]">Имя</th><th className="ui-th w-[25%]">Город</th><th className="ui-th w-[30%]">Телефон</th><th className="ui-th pr-8 text-right w-[15%]"></th></tr></thead>
+      <div className="table-card">
+        <div className="table-scroll-area">
+        <table className="data-table">
+            <thead><tr><th className="th-base pl-8 w-[30%]">Имя</th><th className="th-base w-[25%]">Город</th><th className="th-base w-[30%]">Телефон</th><th className="th-base pr-8 text-right w-[15%]"></th></tr></thead>
             <tbody>
             {paginatedClients.map(c => (
-                <tr key={c.id} className="ui-tr">
-                    <td className="ui-td-title pl-8">{c.name}</td>
-                    <td className="ui-td">{c.city}</td>
-                    <td className="ui-td-meta font-mono">{c.phone}</td>
-                    <td className="ui-td-actions pr-8"><div className="ui-actions-group"><Button onClick={() => openModal(c)} variant="primary" icon={Edit} className="w-9 h-9 px-0"/><Button onClick={() => setConfirmDeleteId(c.id)} variant="danger" icon={Trash2} className="w-9 h-9 px-0"/></div></td>
+                <tr key={c.id} className="tr-row">
+                    <td className="td-title pl-8">{c.name}</td>
+                    <td className="td-base">{c.city}</td>
+                    <td className="td-mono">{c.phone}</td>
+                    <td className="td-actions pr-8"><div className="actions-group"><button onClick={() => openModal(c)} className="btn-action-primary"><Edit size={24}/></button><button onClick={() => setConfirmDeleteId(c.id)} className="btn-action-danger"><Trash2 size={24}/></button></div></td>
                 </tr>
             ))}
             </tbody>
